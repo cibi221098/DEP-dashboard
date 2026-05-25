@@ -2502,7 +2502,17 @@ function toggleMonthlyBreakdown(){
 
 function addDeductionRow(person){
   const personName=person==='ragul'?'Ragul Vignesh':person==='ashwath'?'Ashwath Kumar':'Sathis Kumar';
-  const row={person:personName,type:'Withdrawal',year:CUR_YEAR,month:'January',amount:0};
+  // Pick a default year/month that falls inside the active FY filter so the new row is visible immediately
+  const fy=getDedFy(person);
+  let defaultYear=CUR_YEAR;
+  let defaultMonth=CUR_MONTH;
+  if(fy){
+    const startYr=parseInt(fy.split('-')[0],10);
+    // Use April of the FY start year — always inside the selected FY
+    defaultYear=String(startYr);
+    defaultMonth='April';
+  }
+  const row={person:personName,type:'Withdrawal',year:defaultYear,month:defaultMonth,amount:0};
   getDashState().deductions.push(row);
   renderDeductionTab();
 }
@@ -5216,4 +5226,3 @@ function runAddFyYear(){
   document.addEventListener('wheel',function(e){if(document.activeElement.type==='number'){document.activeElement.blur();}},{passive:true});
 })();
 </script>
-
