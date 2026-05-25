@@ -466,16 +466,12 @@ div[style*="dedEntryCard"],div[style*="border-radius:8px;margin-bottom:7px"]{tra
               <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Total Spent</div>
               <div style="font-family:'Playfair Display',serif;font-size:16px;color:var(--danger)" id="company-purchase-total">₹0</div>
             </div>
-            <button id="btn-edit-company-purchases" class="action-btn" style="font-size:12px;min-width:58px" onclick="toggleLedgerEdit('company-purchases')">✏️ Edit</button>
             <span id="arrow-company-purchases" style="font-size:14px;color:var(--gold)">▼</span>
           </div>
         </div>
         <div id="panel-company-purchases" style="display:none;padding:16px 18px;border-top:1px solid var(--border);background:#fff">
-          <div id="add-row-company-purchases" style="display:none;margin-bottom:12px">
-            <button class="action-btn primary" style="font-size:12px" onclick="addCompanyPurchase()">+ Add Purchase</button>
-          </div>
-          <div style="display:grid;grid-template-columns:50px 1fr 120px 100px 90px 90px 36px;gap:8px;margin-bottom:8px;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding:0 4px">
-            <div>S.No</div><div>Description</div><div>Date</div><div>Bill Type</div><div>Pay Via</div><div>Amount (₹)</div><div></div>
+          <div style="margin-bottom:12px">
+            <button class="action-btn primary" style="font-size:12px" onclick="openCpModal(null)">+ Add Purchase</button>
           </div>
           <div id="company-purchase-rows"></div>
           <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
@@ -485,7 +481,6 @@ div[style*="dedEntryCard"],div[style*="border-radius:8px;margin-bottom:7px"]{tra
               <span style="font-size:12px;color:var(--muted)">🏦 Acct (Non-GST): <strong style="color:#5A1A8A" id="company-purchase-acct-nongst">₹0</strong></span>
               <span style="font-size:12px;color:var(--muted)">Total: <strong style="font-family:'Playfair Display',serif;font-size:14px;color:var(--danger)" id="company-purchase-subtotal">₹0</strong></span>
             </div>
-            <button id="btn-save-company-purchases" class="action-btn primary" style="font-size:12px;display:none" onclick="saveLedgerPanel('company-purchases')">💾 Save</button>
           </div>
         </div>
       </div>
@@ -1508,6 +1503,53 @@ div[style*="dedEntryCard"],div[style*="border-radius:8px;margin-bottom:7px"]{tra
     <div class="modal-foot">
       <button class="action-btn" onclick="closeGstPayModal()">Cancel</button>
       <button class="action-btn primary" onclick="saveGstPayModal()">💾 Save Payment</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── COMPANY PURCHASE MODAL ── -->
+<div class="modal-bg hidden" id="cp-modal">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title" id="cp-modal-title">Add Purchase</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">Company Expense · Ledger</div>
+      </div>
+      <button class="modal-close" onclick="closeCpModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>Description</label>
+          <input type="text" id="cp-m-desc" placeholder="e.g. Camera Lens, Office Chair…" style="font-size:13px">
+        </div>
+        <div class="form-group">
+          <label>Date</label>
+          <input type="date" id="cp-m-date" style="font-size:13px">
+        </div>
+        <div class="form-group">
+          <label>Amount (₹)</label>
+          <input type="number" id="cp-m-amount" placeholder="0" style="font-size:13px">
+        </div>
+        <div class="form-group">
+          <label>Bill Type</label>
+          <select id="cp-m-billtype" style="font-size:13px">
+            <option value="Non-GST">Non-GST</option>
+            <option value="GST">GST</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Pay Via</label>
+          <select id="cp-m-paymethod" style="font-size:13px">
+            <option value="Cash">Cash</option>
+            <option value="Account">Account</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="action-btn" onclick="closeCpModal()">Cancel</button>
+      <button class="action-btn primary" onclick="saveCpModal()">💾 Save Purchase</button>
     </div>
   </div>
 </div>
@@ -3639,12 +3681,66 @@ function getCompanyPurchases(){
   return state.dashData.companyPurchases;
 }
 
-function addCompanyPurchase(){
-  const cp=getCompanyPurchases();
-  const row={serial:cp.length+1,description:'',date:'',billType:'Non-GST',payMethod:'Cash',amount:0};
-  cp.push(row);
-  renderCompanyPurchases();
+// ─── COMPANY PURCHASE MODAL ───────────────────────────────────────────────────
+
+let _cpModalIdx = null;
+
+function openCpModal(idx){
+  _cpModalIdx = idx;
+  const cp = getCompanyPurchases();
+  let desc='', date='', amount='', billType='Non-GST', payMethod='Cash';
+  if(idx !== null && cp[idx]){
+    desc      = cp[idx].description || '';
+    date      = cp[idx].date        || '';
+    amount    = cp[idx].amount      || '';
+    billType  = cp[idx].billType    || 'Non-GST';
+    payMethod = cp[idx].payMethod   || 'Cash';
+  }
+  document.getElementById('cp-modal-title').textContent = idx===null ? 'Add Purchase' : 'Edit Purchase';
+  document.getElementById('cp-m-desc').value      = desc;
+  document.getElementById('cp-m-date').value      = date;
+  document.getElementById('cp-m-amount').value    = amount;
+  document.getElementById('cp-m-billtype').value  = billType;
+  document.getElementById('cp-m-paymethod').value = payMethod;
+  document.getElementById('cp-modal').classList.remove('hidden');
+  setTimeout(()=>document.getElementById('cp-m-desc').focus(), 80);
 }
+
+function closeCpModal(){
+  document.getElementById('cp-modal').classList.add('hidden');
+  _cpModalIdx = null;
+}
+
+function saveCpModal(){
+  const desc      = document.getElementById('cp-m-desc').value.trim();
+  const date      = document.getElementById('cp-m-date').value;
+  const amount    = parseFloat(document.getElementById('cp-m-amount').value)||0;
+  const billType  = document.getElementById('cp-m-billtype').value;
+  const payMethod = document.getElementById('cp-m-paymethod').value;
+
+  if(!desc){ document.getElementById('cp-m-desc').focus(); return; }
+
+  // Close immediately before any recalc that could error
+  closeCpModal();
+
+  const cp = getCompanyPurchases();
+  if(_cpModalIdx !== null && cp[_cpModalIdx]){
+    const row = cp[_cpModalIdx];
+    row.description = desc; row.date = date; row.amount = amount;
+    row.billType = billType; row.payMethod = payMethod;
+    savePurchaseDb(row);
+  } else {
+    const row = {serial: cp.length+1, description:desc, date, billType, payMethod, amount};
+    cp.push(row);
+    savePurchaseDb(row);
+  }
+  renderCompanyPurchases();
+  renderGstSummaryTable();
+  showToast('Saved ✓');
+}
+
+function addCompanyPurchase(){ openCpModal(null); }
+
 function removeCompanyPurchase(idx){
   const cp=getCompanyPurchases();
   if(cp[idx]&&cp[idx].db_id)deletePurchaseDb(cp[idx].db_id);
@@ -3652,6 +3748,7 @@ function removeCompanyPurchase(idx){
   cp.forEach((p,i)=>p.serial=i+1);
   renderCompanyPurchases();renderGstSummaryTable();
 }
+
 function updateCompanyPurchase(idx,field,val){
   const cp=getCompanyPurchases();
   cp[idx][field]=field==='amount'?(+val||0):val;
@@ -3662,41 +3759,32 @@ function renderCompanyPurchases(){
   const cp=getCompanyPurchases();
   const container=document.getElementById('company-purchase-rows');
   if(!container)return;
-  const isEdit=_ledgerEditMode['company-purchases'];
-  const dis=isEdit?'':'disabled';
-  const disStyle=isEdit?'':'opacity:0.6;background:#f5f5f5;';
   if(cp.length===0){
-    container.innerHTML=`<div style="color:var(--muted);font-size:12px;padding:8px 0">No company purchases yet.${isEdit?' Click + Add Purchase above.':''}</div>`;
+    container.innerHTML=`<div style="color:var(--muted);font-size:12px;padding:8px 0">No company purchases yet. Click + Add Purchase to get started.</div>`;
   } else {
     container.innerHTML=cp.map((p,i)=>{
       const bt=p.billType||'Non-GST';
       const pm=p.payMethod||'Cash';
-      const btBg=isEdit?(bt==='GST'?'#DCF0E7':'#FEF0DC'):'#f5f5f5';
-      const btColor=isEdit?(bt==='GST'?'#1A7A4A':'#996B00'):'#888';
-      const pmBg=isEdit?(pm==='Account'?'#E8F0FB':'#FFF3E0'):'#f5f5f5';
-      const pmColor=isEdit?(pm==='Account'?'#1A4A8A':'#7A5000'):'#888';
-      return`<div style="display:grid;grid-template-columns:50px 1fr 120px 100px 90px 90px 36px;gap:8px;align-items:center;margin-bottom:8px">
-        <div style="font-size:12px;color:var(--muted);text-align:center;font-family:'Playfair Display',serif;font-weight:600">#${p.serial||i+1}</div>
-        <input type="text" value="${(p.description||'').replace(/"/g,'&quot;')}" placeholder="e.g. Camera Lens" ${dis}
-          onchange="updateCompanyPurchase(${i},'description',this.value)"
-          style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:'DM Sans',sans-serif;width:100%;${disStyle}">
-        <input type="date" value="${p.date||''}" ${dis}
-          onchange="updateCompanyPurchase(${i},'date',this.value)"
-          style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:'DM Sans',sans-serif;width:100%;${disStyle}">
-        <select ${dis} onchange="updateCompanyPurchase(${i},'billType',this.value);this.style.background=this.value==='GST'?'#DCF0E7':'#FEF0DC';this.style.color=this.value==='GST'?'#1A7A4A':'#996B00'"
-          style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:11px;font-family:'DM Sans',sans-serif;font-weight:500;background:${btBg};color:${btColor}">
-          <option ${bt==='Non-GST'?'selected':''}>Non-GST</option>
-          <option ${bt==='GST'?'selected':''}>GST</option>
-        </select>
-        <select ${dis} onchange="updateCompanyPurchase(${i},'payMethod',this.value);this.style.background=this.value==='Account'?'#E8F0FB':'#FFF3E0';this.style.color=this.value==='Account'?'#1A4A8A':'#7A5000'"
-          style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:11px;font-family:'DM Sans',sans-serif;font-weight:500;background:${pmBg};color:${pmColor}">
-          <option ${pm==='Cash'?'selected':''}>Cash</option>
-          <option ${pm==='Account'?'selected':''}>Account</option>
-        </select>
-        <input type="number" value="${p.amount||''}" placeholder="0" ${dis}
-          onchange="updateCompanyPurchase(${i},'amount',this.value)"
-          style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:'DM Sans',sans-serif;width:100%;${disStyle}">
-        <button onclick="removeCompanyPurchase(${i})" ${dis} style="width:28px;height:28px;background:#FDE8E8;border:none;border-radius:6px;color:var(--danger);cursor:pointer;font-size:16px;${!isEdit?'opacity:0.4;cursor:not-allowed;':''}">×</button>
+      const btBg=bt==='GST'?'#DCF0E7':'#FEF0DC';
+      const btCol=bt==='GST'?'#1A7A4A':'#996B00';
+      const pmBg=pm==='Account'?'#E8F0FB':'#FFF3E0';
+      const pmCol=pm==='Account'?'#1A4A8A':'#7A5000';
+      const dateStr=p.date?new Date(p.date).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}):'—';
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:7px;background:#fff;gap:10px">
+        <div style="width:28px;height:28px;border-radius:6px;background:var(--surface);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--muted);font-family:'Playfair Display',serif;font-weight:600;flex-shrink:0">${p.serial||i+1}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.description||'—'}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">${dateStr}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+          <span style="background:${btBg};color:${btCol};border-radius:20px;padding:3px 9px;font-size:11px;font-weight:500">${bt}</span>
+          <span style="background:${pmBg};color:${pmCol};border-radius:20px;padding:3px 9px;font-size:11px;font-weight:500">${pm}</span>
+          <span style="font-family:'Playfair Display',serif;font-size:13px;color:var(--danger);font-weight:600;min-width:70px;text-align:right">${fmt(p.amount)}</span>
+        </div>
+        <div style="display:flex;gap:5px;flex-shrink:0">
+          <button onclick="openCpModal(${i})" style="padding:4px 9px;border:1px solid var(--border);border-radius:6px;background:#fff;cursor:pointer;font-size:11px;color:var(--muted);font-family:'DM Sans',sans-serif" title="Edit">✏️</button>
+          <button onclick="if(confirm('Delete this purchase?'))removeCompanyPurchase(${i})" style="padding:4px 9px;border:1px solid #F5C6C6;border-radius:6px;background:#fff;cursor:pointer;font-size:11px;color:var(--danger);font-family:'DM Sans',sans-serif" title="Delete">🗑</button>
+        </div>
       </div>`;
     }).join('');
   }
@@ -5382,6 +5470,7 @@ function runAddFyYear(){
     if(e.key==='Escape'){
       if(!document.getElementById('ded-modal').classList.contains('hidden'))    { closeDedModal();     return; }
       if(!document.getElementById('gst-pay-modal').classList.contains('hidden')){ closeGstPayModal();  return; }
+      if(!document.getElementById('cp-modal').classList.contains('hidden'))     { closeCpModal();      return; }
       if(!document.getElementById('event-modal').classList.contains('hidden'))  { closeModal();        return; }
       if(!document.getElementById('gst-modal').classList.contains('hidden'))    { closeGstModal();     return; }
       if(!document.getElementById('inst-modal').classList.contains('hidden'))   { closeInstModal();    return; }
@@ -5389,6 +5478,7 @@ function runAddFyYear(){
     if(e.key==='Enter' && (e.ctrlKey||e.metaKey)){
       if(!document.getElementById('ded-modal').classList.contains('hidden'))    { saveDedModal();      return; }
       if(!document.getElementById('gst-pay-modal').classList.contains('hidden')){ saveGstPayModal();   return; }
+      if(!document.getElementById('cp-modal').classList.contains('hidden'))     { saveCpModal();       return; }
     }
   });
 })();
