@@ -1067,6 +1067,23 @@ div[style*="dedEntryCard"],div[style*="border-radius:8px;margin-bottom:7px"]{tra
 </div>
 </div>
 
+<!-- ── EVENT DETAIL POPUP ────────────────────────────────────── -->
+<div class="modal-bg hidden" id="ev-detail-modal" onclick="if(event.target===this)closeEvDetail()">
+  <div class="modal" style="max-width:620px" onclick="event.stopPropagation()">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title" id="evd-title" style="font-size:17px"></div>
+        <div id="evd-subtitle" style="font-size:11px;color:var(--muted);margin-top:2px"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button class="action-btn primary" id="evd-edit-btn">Edit</button>
+        <button class="modal-close" onclick="closeEvDetail()">&#x2715;</button>
+      </div>
+    </div>
+    <div class="modal-body" id="evd-body" style="padding:18px 22px;max-height:72vh;overflow-y:auto"></div>
+  </div>
+</div>
+
 <!-- NON-GST ADD/EDIT MODAL -->
 <div class="modal-bg hidden" id="event-modal">
   <div class="modal">
@@ -1930,7 +1947,7 @@ function renderTable(){
     const {totalExp,profit,isPaid,profitUnlocked,postProdDone,postProdExpense}=calcTotals(ev);
     const balance=isPaid?0:ev.balanceStatus==='Partially Paid'?(ev.clientPending||0):(ev.total||0)-(ev.advance||0);
     const postProdBadge=postProdExpense>0?(!postProdDone?'<div style="font-size:9px;background:#FFF3CD;color:#856404;border-radius:4px;padding:1px 5px;margin-top:2px;display:inline-block">🎬 Post-Prod Pending</div>':'<div style="font-size:9px;background:#DCF0E7;color:#1A7A4A;border-radius:4px;padding:1px 5px;margin-top:2px;display:inline-block">🎬 Post-Prod Done</div>'):'';
-    return`<tr>
+    return`<tr style="cursor:pointer" onclick="openEvDetail('${ev.id}','nongst')">
       <td style="color:var(--muted);font-size:11px">${ev.id}</td>
       <td style="font-weight:500">${ev.client}</td>
       <td><span class="type-pill">${ev.type||'-'}</span></td>
@@ -1940,7 +1957,7 @@ function renderTable(){
       <td class="num" style="color:${isPaid?'var(--muted)':ev.balanceStatus==='Partially Paid'?'#6B1AB5':'var(--danger)'}">${balance>0?fmt(balance):'<span style="color:var(--muted)">—</span>'}</td>
       <td>${isPaid?'<span class="badge paid">Paid</span>':ev.balanceStatus==='Partially Paid'?('<span class="badge partial">🔶 Partial</span>'):'<span class="badge pending">Pending</span>'}${postProdBadge}</td>
       <td class="num">${profitUnlocked?`<span style="color:var(--success);font-weight:500">${fmt(profit)}</span>`:'<span style="color:var(--muted);font-size:11px">Awaiting</span>'}</td>
-      <td style="display:flex;gap:5px">
+      <td style="display:flex;gap:5px" onclick="event.stopPropagation()">
         <button class="action-btn" onclick="openEdit('${ev.id}')">Edit</button>
         <button class="action-btn danger" onclick="deleteEvent('${ev.id}')">Del</button>
       </td>
@@ -2258,7 +2275,7 @@ function renderGstTable(){
     const grandTotal=(ev.total||0)+gstAmt;
     const balance=isPaid?0:ev.balanceStatus==='Partially Paid'?(ev.clientPending||0):grandTotal-(ev.advance||0);
     const postProdBadge=postProdExpense>0?(!postProdDone?'<div style="font-size:9px;background:#FFF3CD;color:#856404;border-radius:4px;padding:1px 5px;margin-top:2px;display:inline-block">🎬 Post-Prod Pending</div>':'<div style="font-size:9px;background:#DCF0E7;color:#1A7A4A;border-radius:4px;padding:1px 5px;margin-top:2px;display:inline-block">🎬 Post-Prod Done</div>'):'';
-    return`<tr>
+    return`<tr style="cursor:pointer" onclick="openEvDetail('${ev.id}','gst')">
       <td style="color:var(--muted);font-size:11px">${ev.id}</td>
       <td style="font-size:12px;color:var(--muted)">${ev.bill||'-'}</td>
       <td style="font-weight:500">${ev.client}</td>
@@ -2273,7 +2290,7 @@ function renderGstTable(){
       <td class="num" style="color:${isPaid?'var(--muted)':ev.balanceStatus==='Partially Paid'?'#6B1AB5':'var(--danger)'}">${balance>0?fmt(balance):'<span style="color:var(--muted)">—</span>'}</td>
       <td>${isPaid?'<span class="badge paid">Paid</span>':ev.balanceStatus==='Partially Paid'?('<span class="badge partial">🔶 Partial</span>'):'<span class="badge pending">Pending</span>'}${postProdBadge}</td>
       <td class="num">${profitUnlocked?`<span style="color:${isMk?'#5A1A8A':'var(--success)'};font-weight:500">${fmt(profit)}</span>${isMk?'<span style="font-size:9px;color:#5A1A8A;margin-left:3px">→Sathis</span>':''}`:'<span style="color:var(--muted);font-size:11px">Awaiting</span>'}</td>
-      <td style="display:flex;gap:5px">
+      <td style="display:flex;gap:5px" onclick="event.stopPropagation()">
         <button class="action-btn" onclick="openGstEdit('${ev.id}')">Edit</button>
         <button class="action-btn danger" onclick="deleteGstEntry('${ev.id}')">Del</button>
       </td>
@@ -5446,6 +5463,137 @@ function runAddFyYear(){
 
 // ── END SMART TOOLS ──────────────────────────────────────────────
 
+
+// ── EVENT DETAIL POPUP ──────────────────────────────────────────────
+function openEvDetail(id, source){
+  const ev = source==='gst'
+    ? (state.gstEntries||[]).find(e=>e.id===id)
+    : (state.events||[]).find(e=>e.id===id);
+  if(!ev) return;
+
+  const isGst = source==='gst';
+  const tots = isGst ? calcGstTotals(ev) : calcTotals(ev);
+  const {profit, profitUnlocked, totalExp, isPaid, isPartial, isMk} = tots;
+  const gstAmt = isGst ? Math.round((ev.total||0)*0.18) : 0;
+  const grandTotal = (ev.total||0) + gstAmt;
+  const balance = isPaid ? 0 : ev.balanceStatus==='Partially Paid' ? (ev.clientPending||0) : grandTotal-(ev.advance||0);
+
+  // Header
+  document.getElementById('evd-title').textContent = ev.client || '—';
+  const statusLabel = isPaid ? '✅ Paid' : isPartial ? '🔶 Partially Paid' : '⏳ Pending';
+  const typeLabel = isGst ? (ev.bizType||'Events') + (ev.bill?' · Bill '+ev.bill:'') : (ev.type||'');
+  document.getElementById('evd-subtitle').textContent =
+    [ev.date||'', typeLabel, statusLabel].filter(Boolean).join('  ·  ');
+
+  // Edit button wires to correct modal
+  const editBtn = document.getElementById('evd-edit-btn');
+  editBtn.onclick = () => { closeEvDetail(); isGst ? openGstEdit(id) : openEdit(id); };
+
+  // Expenses rows
+  const expRows = (ev.expenses||[]).map(e=>
+    `<tr><td style="padding:5px 8px;color:var(--muted);font-size:12px">${e.type||'—'}</td><td style="padding:5px 8px;font-size:12px;color:var(--muted)">${e.note||'—'}</td><td style="padding:5px 8px;text-align:right;font-size:12px" class="num">${fmt(e.amount||0)}</td></tr>`
+  ).join('');
+  const vendorRows = (ev.vendors||[]).map(v=>
+    `<tr><td style="padding:5px 8px;font-size:12px">${v.name||'—'}</td><td style="padding:5px 8px;font-size:12px;color:var(--muted)">${v.type||'—'}</td><td style="padding:5px 8px;text-align:right;font-size:12px" class="num">${fmt(v.payment||0)}</td></tr>`
+  ).join('');
+
+  const sectionHead = (label, color='var(--muted)') =>
+    `<div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:${color};margin:14px 0 6px">${label}</div>`;
+
+  const row2 = (label, val, valColor='var(--black)') =>
+    `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:12px;color:var(--muted)">${label}</span>
+      <span style="font-size:13px;font-weight:500;color:${valColor}">${val}</span>
+    </div>`;
+
+  let html = '';
+
+  // ── Event Info ──
+  html += sectionHead('📋 Event Details');
+  html += `<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 14px">`;
+  html += row2('Event ID', ev.id||'—');
+  if(ev.phone) html += row2('Phone', ev.phone);
+  if(ev.coordinator) html += row2('Coordinator', ev.coordinator);
+  html += row2('Date', ev.date||'—');
+  html += row2('Type', ev.type||ev.bizType||'—');
+  if(isGst && ev.bill) html += row2('Bill No.', ev.bill);
+  html += `</div>`;
+
+  // ── Revenue ──
+  html += sectionHead('💰 Revenue');
+  html += `<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 14px">`;
+  html += row2('Total Revenue', fmt(ev.total||0));
+  if(isGst){ html += row2('GST (18%)', fmt(gstAmt), '#1A4A8A'); html += row2('Grand Total', fmt(grandTotal), '#1A4A8A'); }
+  if(isGst && isPaid && (ev.tds||0)>0) html += row2('TDS Deducted', fmt(ev.tds||0), 'var(--danger)');
+  html += row2('Advance Received', fmt(ev.advance||0), 'var(--success)');
+  html += row2('Balance ' + (isPaid?'(Cleared)': isPartial?'(Still Owed)':'(Pending)'),
+    isPaid ? '—' : fmt(balance),
+    isPaid ? 'var(--muted)' : isPartial ? '#6B1AB5' : 'var(--danger)');
+  html += row2('Company Method', ev.companyMethod||'Cash');
+  html += `</div>`;
+
+  // ── Expenses ──
+  if((ev.expenses||[]).length || (ev.vendors||[]).length || (ev.postProdExpense||0)>0){
+    html += sectionHead('🧾 Expenses & Vendors');
+    html += `<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden">`;
+    if((ev.expenses||[]).length){
+      html += `<div style="padding:6px 10px;background:#F5F3EC;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Internal Expenses</div>`;
+      html += `<table style="width:100%;border-collapse:collapse"><tbody>${expRows}</tbody></table>`;
+    }
+    if((ev.vendors||[]).length){
+      html += `<div style="padding:6px 10px;background:#F5F3EC;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Vendor Payments</div>`;
+      html += `<table style="width:100%;border-collapse:collapse"><tbody>${vendorRows}</tbody></table>`;
+    }
+    if(ev.postProdExpense||0){
+      html += `<div style="padding:8px 12px;display:flex;justify-content:space-between;border-top:1px solid var(--border)">
+        <span style="font-size:12px;color:var(--muted)">🎬 Post-Production${ev.postProdDone?' <span style=\'color:var(--success);font-size:10px\'>✓ Done</span>':' <span style=\'color:#856404;font-size:10px\'>⏳ Pending</span>'}</span>
+        <span style="font-size:12px;font-weight:500" class="num">${fmt(ev.postProdExpense)}</span>
+      </div>`;
+    }
+    html += `<div style="display:flex;justify-content:space-between;padding:8px 12px;background:var(--gold-pale);border-top:1px solid var(--border)">
+      <span style="font-size:12px;font-weight:600">Total Expenses</span>
+      <span style="font-size:13px;font-weight:700;color:var(--danger)" class="num">${fmt(totalExp)}</span>
+    </div>`;
+    html += `</div>`;
+  }
+
+  // ── Profit Distribution ──
+  html += sectionHead('📊 Profit Distribution', profitUnlocked?'var(--success)':'var(--muted)');
+  if(!profitUnlocked){
+    html += `<div style="padding:12px 14px;background:#FEF0DC;border:1px solid #F5C842;border-radius:8px;font-size:12px;color:#996B00">⏳ Profit distribution unlocked once marked Paid or Partially Paid.</div>`;
+  } else {
+    const comp = isGst ? calcGstTotals(ev).company : calcTotals(ev).company;
+    const rag  = isGst ? calcGstTotals(ev).ragul   : calcTotals(ev).ragul;
+    const ash  = isGst ? calcGstTotals(ev).ashwath  : calcTotals(ev).ashwath;
+    const sat  = isGst ? calcGstTotals(ev).sathis   : calcTotals(ev).sathis;
+    html += `<div style="background:var(--black);border-radius:10px;padding:14px">`;
+    html += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <span style="font-size:10px;color:var(--gold);text-transform:uppercase;letter-spacing:1px;font-weight:500">Net Profit</span>
+      <span style="font-family:'Playfair Display',serif;font-size:22px;font-weight:700;color:#3DD68C">${fmt(profit)}</span>
+    </div>`;
+    html += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">`;
+    const pCard = (name, pct, amt, color) =>
+      `<div style="background:rgba(255,255,255,.06);border:1px solid rgba(184,150,12,.2);border-radius:8px;padding:9px 7px;text-align:center">
+        <div style="font-size:10px;color:#bbb;margin-bottom:2px">${name}</div>
+        <div style="font-size:10px;color:var(--gold);margin-bottom:4px">${pct}</div>
+        <div style="font-family:'Playfair Display',serif;font-size:15px;font-weight:700;color:${color}">${fmt(Math.round(amt))}</div>
+      </div>`;
+    html += pCard('Company','15%', comp, '#fff');
+    html += pCard('Ragul','20%', rag, '#fff');
+    html += pCard('Ashwath','20%', ash, '#fff');
+    html += pCard('Sathis', isGst&&isMk?'100%':'45%', sat, '#fff');
+    html += `</div></div>`;
+  }
+
+  document.getElementById('evd-body').innerHTML = html;
+  document.getElementById('ev-detail-modal').classList.remove('hidden');
+}
+
+function closeEvDetail(){
+  document.getElementById('ev-detail-modal').classList.add('hidden');
+}
+// ── END EVENT DETAIL POPUP ──────────────────────────────────────────
+
 // ── ASYNC BOOT ────────────────────────────────────────────────────
 (async function boot(){
   await loadAllFromSupabase();
@@ -5473,6 +5621,7 @@ function runAddFyYear(){
       if(!document.getElementById('ded-modal').classList.contains('hidden'))    { closeDedModal();     return; }
       if(!document.getElementById('gst-pay-modal').classList.contains('hidden')){ closeGstPayModal();  return; }
       if(!document.getElementById('cp-modal').classList.contains('hidden'))     { closeCpModal();      return; }
+      if(!document.getElementById('ev-detail-modal').classList.contains('hidden')){ closeEvDetail();     return; }
       if(!document.getElementById('event-modal').classList.contains('hidden'))  { closeModal();        return; }
       if(!document.getElementById('gst-modal').classList.contains('hidden'))    { closeGstModal();     return; }
       if(!document.getElementById('inst-modal').classList.contains('hidden'))   { closeInstModal();    return; }
