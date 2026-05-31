@@ -1697,6 +1697,7 @@ const _dedEditMode={ragul:false,ashwath:false,sathis:false};
 // FY HELPERS
 function fyLabel(s){return s+'-'+String(s+1).slice(-2);}
 function fyStartYear(label){return label?parseInt(label.split('-')[0],10):null;}
+function fyLabelFromCalYear(yr){return yr+'-'+(String(+yr+1).slice(2));}
 function getCurFyLabel(){var m=NOW.getMonth(),y=NOW.getFullYear();return fyLabel(m>=3?y:y-1);}
 function getAllFyLabels(){
   var set=new Set();
@@ -2540,7 +2541,7 @@ function exportByFY(){
     rows.push(['#','Client','Type','Date','Month','Total','Advance','Balance','Status','Net Profit','Pay Method']);
     fyFilterArr(state.events||[],fy).forEach(ev=>{
       const{profit}=calcTotals(ev);
-      rows.push([ev.id,ev.client,ev.type||'',ev.date||'',ev.month||'',ev.total||0,ev.advance||0,(ev.total||0)-(ev.advance||0),ev.balanceStatus||'',(ev.balanceStatus==='Paid'||ev.balanceStatus==='Partially Paid')?Math.round(profit):'',ev.companyMethod||'']);
+      rows.push([ev.id,ev.client,ev.type||'',ev.date||'',ev.month||'',ev.total||0,ev.advance||0,ev.balanceStatus==='Paid'?0:ev.balanceStatus==='Partially Paid'?(ev.clientPending||0):(ev.total||0)-(ev.advance||0),ev.balanceStatus||'',(ev.balanceStatus==='Paid'||ev.balanceStatus==='Partially Paid')?Math.round(profit):'',ev.companyMethod||'']);
     });
     rows.push([]);
   }
@@ -2549,9 +2550,9 @@ function exportByFY(){
     rows.push(['#','Bill No','Client','Business','Type','Date','Month','Total','GST 18%','TDS','Advance','Balance','Status','Net Profit']);
     fyFilterArr(state.gstEntries||[],fy).forEach(ev=>{
       const{profit}=calcGstTotals(ev);
-      rows.push([ev.id,ev.bill||'',ev.client,ev.bizType||'',ev.type||'',ev.date||'',ev.month||'',ev.total||0,Math.round((ev.total||0)*0.18),ev.tds||0,ev.advance||0,(ev.total||0)-(ev.advance||0),ev.balanceStatus||'',(ev.balanceStatus==='Paid'||ev.balanceStatus==='Partially Paid')?Math.round(profit):'']);
+      rows.push([ev.id,ev.bill||'',ev.client,ev.bizType||'',ev.type||'',ev.date||'',ev.month||'',ev.total||0,Math.round((ev.total||0)*0.18),ev.tds||0,ev.advance||0,ev.balanceStatus==='Paid'?0:ev.balanceStatus==='Partially Paid'?(ev.clientPending||0):(ev.total||0)-(ev.advance||0),ev.balanceStatus||'',(ev.balanceStatus==='Paid'||ev.balanceStatus==='Partially Paid')?Math.round(profit):'']);
     });
-    const paidTds=fyFilterArr(state.gstEntries||[],fy).filter(e=>e.balanceStatus==='Paid'&&(e.tds||0)>0);
+    const paidTds=fyFilterArr(state.gstEntries||[],fy).filter(e=>(e.balanceStatus==='Paid'||e.balanceStatus==='Partially Paid')&&(e.tds||0)>0);
     if(paidTds.length){
       rows.push([]);rows.push(['=== TDS SUMMARY ===']);
       rows.push(['Client','Bill No','Date','TDS Amount']);
@@ -2580,14 +2581,14 @@ function exportByMonth(){
     if(ng.length){
       rows.push(['Non-GST']);
       rows.push(['#','Client','Type','Date','Total','Advance','Balance','Status','Profit']);
-      ng.forEach(ev=>{const{profit}=calcTotals(ev);rows.push([ev.id,ev.client,ev.type||'',ev.date||'',ev.total||0,ev.advance||0,(ev.total||0)-(ev.advance||0),ev.balanceStatus||'',(ev.balanceStatus==='Paid'||ev.balanceStatus==='Partially Paid')?Math.round(profit):'']);});
+      ng.forEach(ev=>{const{profit}=calcTotals(ev);rows.push([ev.id,ev.client,ev.type||'',ev.date||'',ev.total||0,ev.advance||0,ev.balanceStatus==='Paid'?0:ev.balanceStatus==='Partially Paid'?(ev.clientPending||0):(ev.total||0)-(ev.advance||0),ev.balanceStatus||'',(ev.balanceStatus==='Paid'||ev.balanceStatus==='Partially Paid')?Math.round(profit):'']);});
       rows.push(['','','','','Sub-total',ng.reduce((a,e)=>a+(e.total||0),0)]);
     }
     if(gst.length){
       rows.push(['GST Billing']);
       rows.push(['#','Bill','Client','Type','Date','Total','GST','TDS','Status','Profit']);
-      gst.forEach(ev=>{const{profit}=calcGstTotals(ev);rows.push([ev.id,ev.bill||'',ev.client,ev.bizType||'',ev.date||'',ev.total||0,Math.round((ev.total||0)*0.18),ev.tds||0,ev.balanceStatus||'',(ev.balanceStatus==='Paid'||ev.balanceStatus==='Partially Paid')?Math.round(profit):'']);});
-      rows.push(['','','','','Sub-total',gst.reduce((a,e)=>a+(e.total||0),0),'',gst.filter(e=>e.balanceStatus==='Paid').reduce((a,e)=>a+(e.tds||0),0)]);
+      gst.forEach(ev=>{const{profit}=calcGstTotals(ev);const gstAmt=Math.round((ev.total||0)*0.18);const gtot=(ev.total||0)+gstAmt;rows.push([ev.id,ev.bill||'',ev.client,ev.bizType||'',ev.date||'',ev.total||0,gstAmt,ev.tds||0,ev.balanceStatus||'',(ev.balanceStatus==='Paid'||ev.balanceStatus==='Partially Paid')?Math.round(profit):'']);});
+      rows.push(['','','','','Sub-total',gst.reduce((a,e)=>a+(e.total||0),0),'',gst.filter(e=>e.balanceStatus==='Paid'||e.balanceStatus==='Partially Paid').reduce((a,e)=>a+(e.tds||0),0)]);
     }
     rows.push([]);
   });
@@ -2914,7 +2915,9 @@ function renderMonthlyBreakdown(){
     <td style="${_tdBase};text-align:right;color:${d.advPending>0?'#F5C842':'#3a3f50'};font-variant-numeric:tabular-nums">${d.advPending>0?fmt(d.advPending):'—'}</td>
     <td style="${_tdBase};text-align:right;color:${d.clientOwes>0?'#A78BFA':'#3a3f50'};font-variant-numeric:tabular-nums">${d.clientOwes>0?fmt(d.clientOwes):'—'}</td>
     <td style="${_tdBase};text-align:right;color:${d.postProd>0?'#F97316':'#3a3f50'};font-variant-numeric:tabular-nums">${d.postProd>0?fmt(d.postProd):'—'}</td>
-    <td style="${_tdBase};padding:9px 14px;text-align:right;color:${d.profit>0?'#3DD68C':d.profit<0?'#F87171':'#3a3f50'};font-weight:700;font-variant-numeric:tabular-nums">${d.profit!==0?fmt(d.profit):'—'}</td>
+    <td style="${_tdBase};padding:9px 14px;text-align:right;color:${d.profit>0?'#3DD68C':d.profit<0?'#F87171':'#3a3f50'};font-weight:700;font-variant-numeric:tabular-nums" title="${d.partial>0?`Includes profit from ${d.partial} partial event(s) — not yet fully collected`:'Fully collected profit'}">
+      ${d.profit!==0?fmt(d.profit):'—'}${d.partial>0&&d.profit>0?`<span style="font-size:9px;color:#A78BFA;margin-left:4px" title="Includes partial">🔶</span>`:''}
+    </td>
   </tr>`;}).join('');
 }
 
@@ -2949,29 +2952,32 @@ function getYearOb(){
 
 // Auto-calculate what year Y's net cash/acct was (= opening for Y+1)
 function calcYearNetCash(yr){
+  const fyLbl=fyLabelFromCalYear(yr);
   const isPaidOrPartial=e=>e.balanceStatus==='Paid'||e.balanceStatus==='Partially Paid';
-  const ngPaid=(state.events||[]).filter(e=>isPaidOrPartial(e)&&e.date&&e.date.startsWith(yr));
-  const gstPaid=(state.gstEntries||[]).filter(e=>isPaidOrPartial(e)&&e.date&&e.date.startsWith(yr));
+  const ngPaid=fyFilterArr(state.events||[],fyLbl).filter(isPaidOrPartial);
+  const gstPaid=fyFilterArr(state.gstEntries||[],fyLbl).filter(isPaidOrPartial);
   const gstEvPaid=gstPaid.filter(e=>e.bizType!=='Marketing');
   const ngCash=ngPaid.filter(e=>(e.companyMethod||'Cash')==='Cash').reduce((a,e)=>a+calcTotals(e).profit*SPLIT.company,0);
   const gstCash=gstEvPaid.filter(e=>(e.companyMethod||'Cash')==='Cash').reduce((a,e)=>a+calcGstTotals(e).profit*SPLIT.company,0);
-  const allPurchases=getCompanyPurchases().filter(p=>p.date&&p.date.startsWith(yr));
+  const allPurchases=fyFilterArr(getCompanyPurchases(),fyLbl);
   const purchaseCash=allPurchases.filter(p=>p.payMethod==='Cash'||!p.payMethod).reduce((a,p)=>a+(p.amount||0),0);
   // Also carry forward previous year's opening cash
+  const gstCollectedCash=gstPaid.filter(e=>(e.companyMethod||'Cash')==='Cash').reduce((a,e)=>a+Math.round((e.total||0)*0.18),0);
   const prevYrOb=getObForYear(yr);
   const prevCash=prevYrOb.cash;
-  return Math.round(prevCash + ngCash + gstCash - purchaseCash);
+  return Math.round(prevCash + ngCash + gstCash + gstCollectedCash - purchaseCash);
 }
 
 function calcYearNetAcct(yr){
+  const fyLbl=fyLabelFromCalYear(yr);
   const isPaidOrPartial=e=>e.balanceStatus==='Paid'||e.balanceStatus==='Partially Paid';
-  const ngPaid=(state.events||[]).filter(e=>isPaidOrPartial(e)&&e.date&&e.date.startsWith(yr));
-  const gstPaid=(state.gstEntries||[]).filter(e=>isPaidOrPartial(e)&&e.date&&e.date.startsWith(yr));
+  const ngPaid=fyFilterArr(state.events||[],fyLbl).filter(isPaidOrPartial);
+  const gstPaid=fyFilterArr(state.gstEntries||[],fyLbl).filter(isPaidOrPartial);
   const gstEvPaid=gstPaid.filter(e=>e.bizType!=='Marketing');
   const ngAcct=ngPaid.filter(e=>e.companyMethod==='Account').reduce((a,e)=>a+calcTotals(e).profit*SPLIT.company,0);
   const gstAcct=gstEvPaid.filter(e=>e.companyMethod==='Account').reduce((a,e)=>a+calcGstTotals(e).profit*SPLIT.company,0);
-  const gstCollected=gstPaid.reduce((a,e)=>a+Math.round((e.total||0)*0.18),0);
-  const allPurchases=getCompanyPurchases().filter(p=>p.date&&p.date.startsWith(yr));
+  const gstCollected=gstPaid.filter(e=>e.companyMethod==='Account'||!e.companyMethod||e.companyMethod==='').reduce((a,e)=>a+Math.round((e.total||0)*0.18),0);
+  const allPurchases=fyFilterArr(getCompanyPurchases(),fyLbl);
   const purchaseAcctGst=allPurchases.filter(p=>p.payMethod==='Account'&&p.billType==='GST').reduce((a,p)=>a+(p.amount||0),0);
   const purchaseAcctNonGst=allPurchases.filter(p=>p.payMethod==='Account'&&p.billType!=='GST').reduce((a,p)=>a+(p.amount||0),0);
   const allGstPayments=getGstPayments().filter(p=>p.year===yr);
@@ -2987,13 +2993,22 @@ function getObForYear(yr){
   if(!yr) return {cash:0,acct:0};
   const yob=getYearOb();
   const entry=yob[yr]||{};
-  // Override takes priority; otherwise auto from previous year
+  // Override takes priority; otherwise chain back through years to find last computed auto value
   const prevYr=String(+yr-1);
-  const autoCash=(yob[prevYr]||{}).autoCash||0;
-  const autoAcct=(yob[prevYr]||{}).autoAcct||0;
+  let autoCash=(yob[prevYr]||{}).autoCash;
+  let autoAcct=(yob[prevYr]||{}).autoAcct;
+  // If prevYr has no auto value, walk back further until we find one (handles year gaps)
+  if(autoCash==null||autoAcct==null){
+    const years=Object.keys(yob).map(Number).filter(y=>y<+yr).sort((a,b)=>b-a);
+    for(const y of years){
+      if(autoCash==null&&yob[y].autoCash!=null) autoCash=yob[y].autoCash;
+      if(autoAcct==null&&yob[y].autoAcct!=null) autoAcct=yob[y].autoAcct;
+      if(autoCash!=null&&autoAcct!=null) break;
+    }
+  }
   return {
-    cash: entry.cashOverride!=null ? entry.cashOverride : autoCash,
-    acct: entry.acctOverride!=null ? entry.acctOverride : autoAcct
+    cash: entry.cashOverride!=null ? entry.cashOverride : (autoCash||0),
+    acct: entry.acctOverride!=null ? entry.acctOverride : (autoAcct||0)
   };
 }
 
@@ -3171,8 +3186,9 @@ function getPaidSnapshot(fy){
   const sathisEvGross=evProfit*SPLIT.sathis;
   const sathisGross=sathisEvGross+gstMkProfit;
 
-  // ── GST collected (always into account) ──
-  const gstCollectedInAccount=gstPaid.reduce((a,e)=>a+Math.round((e.total||0)*0.18),0);
+  // ── GST collected (split by companyMethod) ──
+  const gstCollectedInAccount=gstPaid.filter(e=>e.companyMethod==='Account'||!e.companyMethod||e.companyMethod==='').reduce((a,e)=>a+Math.round((e.total||0)*0.18),0);
+  const gstCollectedInCash=gstPaid.filter(e=>(e.companyMethod||'Cash')==='Cash').reduce((a,e)=>a+Math.round((e.total||0)*0.18),0);
 
   // ── Purchases ──
   const allPurchases=fyFilterArr(getCompanyPurchases(),fy);
@@ -3202,7 +3218,7 @@ function getPaidSnapshot(fy){
   const sathisDed=filteredDed.filter(r=>r.person==='Sathis Kumar').reduce((a,r)=>a+r.amount,0);
 
   // ── Net pools ──
-  const companyCashNet=(companyCash+obCompanyCash)-purchaseCash;
+  const companyCashNet=(companyCash+gstCollectedInCash+obCompanyCash)-purchaseCash;
   const companyAcctNet=(companyAcct+gstCollectedInAccount+obCompanyAcct)-purchaseAcctTotal-totalGstPaid;
   const ragulNet=(ragulGross+obRagul)-ragulDed;
   const ashwathNet=(ashwathGross+obAshwath)-ashwathDed;
@@ -3216,7 +3232,7 @@ function getPaidSnapshot(fy){
     ngCash,ngAcct,gstCash,gstAcct,
     companyCash,companyAcct,companyGross,
     ragulGross,ashwathGross,sathisEvGross,sathisGross,
-    gstCollectedInAccount,
+    gstCollectedInAccount,gstCollectedInCash,
     allPurchases,purchaseCash,purchaseAcctGst,purchaseAcctNonGst,purchaseAcctTotal,gstInputCredit,
     totalGstPaid,
     obCompanyCash,obCompanyAcct,obRagul,obAshwath,obSathis,
@@ -4104,7 +4120,7 @@ function renderGstSummaryTable(){
 }
 
 function renderTdsSummary(){
-  const fy=document.getElementById('gst-sum-filter-year')?.value||'';  const paidGst=fyFilterArr(state.gstEntries||[],fy).filter(e=>e.balanceStatus==='Paid'&&(e.tds||0)>0);
+  const fy=document.getElementById('gst-sum-filter-year')?.value||'';  const paidGst=fyFilterArr(state.gstEntries||[],fy).filter(e=>(e.balanceStatus==='Paid'||e.balanceStatus==='Partially Paid')&&(e.tds||0)>0);
   const tbody=document.getElementById('tds-yearly-tbody');
   const emptyEl=document.getElementById('tds-yearly-empty');
   if(!tbody)return;
@@ -4230,10 +4246,11 @@ function getPartnerYearOb(personName){
 }
 
 function calcPartnerYearNet(personName, yr){
+  const fyLbl=fyLabelFromCalYear(yr);
   const splitKey=personName==='Ragul Vignesh'?'ragul':'ashwath';
   const isPaidOrPartial=e=>e.balanceStatus==='Paid'||e.balanceStatus==='Partially Paid';
-  const ngPaid=(state.events||[]).filter(e=>isPaidOrPartial(e)&&e.date&&e.date.startsWith(yr));
-  const gstEvPaid=(state.gstEntries||[]).filter(e=>isPaidOrPartial(e)&&e.bizType!=='Marketing'&&e.date&&e.date.startsWith(yr));
+  const ngPaid=fyFilterArr(state.events||[],fyLbl).filter(isPaidOrPartial);
+  const gstEvPaid=fyFilterArr(state.gstEntries||[],fyLbl).filter(e=>isPaidOrPartial(e)&&e.bizType!=='Marketing');
   const gross=ngPaid.reduce((a,e)=>a+calcTotals(e).profit*SPLIT[splitKey],0)
              +gstEvPaid.reduce((a,e)=>a+calcGstTotals(e).profit*SPLIT[splitKey],0);
   const ded=(getDashState().deductions||[]).filter(r=>r.person===personName&&r.year===yr).reduce((a,r)=>a+r.amount,0);
@@ -4246,8 +4263,13 @@ function getPartnerObForYear(personName, yr){
   const yob=getPartnerYearOb(personName);
   const entry=yob[yr]||{};
   const prevYr=String(+yr-1);
-  const autoVal=(yob[prevYr]||{}).auto||0;
-  return entry.override!=null ? entry.override : autoVal;
+  let autoVal=(yob[prevYr]||{}).auto;
+  // Walk back through gaps if prevYr has no auto
+  if(autoVal==null){
+    const years=Object.keys(yob).map(Number).filter(y=>y<+yr).sort((a,b)=>b-a);
+    for(const y of years){if(yob[y].auto!=null){autoVal=yob[y].auto;break;}}
+  }
+  return entry.override!=null ? entry.override : (autoVal||0);
 }
 
 function getPartnerObAllTime(personName){
@@ -4425,14 +4447,18 @@ function getSathisYearOb(){
 }
 
 function calcSathisYearNet(yr){
+  const fyLbl=fyLabelFromCalYear(yr);
   const isPaidOrPartial=e=>e.balanceStatus==='Paid'||e.balanceStatus==='Partially Paid';
-  const gstPaid=(state.gstEntries||[]).filter(e=>isPaidOrPartial(e)&&e.date&&e.date.startsWith(yr));
+  const ngPaid=fyFilterArr(state.events||[],fyLbl).filter(isPaidOrPartial);
+  const gstPaid=fyFilterArr(state.gstEntries||[],fyLbl).filter(isPaidOrPartial);
+  const gstEvPaid=gstPaid.filter(e=>e.bizType!=='Marketing');
   const gstMkPaid=gstPaid.filter(e=>e.bizType==='Marketing');
-  // OB carry-forward applies to marketing profit only
+  // Sathis gets 45% of all events profit + 100% of marketing profit
+  const evGross=(ngPaid.reduce((a,e)=>a+calcTotals(e).profit,0)+gstEvPaid.reduce((a,e)=>a+calcGstTotals(e).profit,0))*SPLIT.sathis;
   const mkGross=gstMkPaid.reduce((a,e)=>a+calcGstTotals(e).profit,0);
   const ded=(getDashState().deductions||[]).filter(r=>r.person==='Sathis Kumar'&&r.year===yr).reduce((a,r)=>a+r.amount,0);
   const ob=getSathisObForYear(yr);
-  return Math.round(ob+mkGross-ded);
+  return Math.round(ob+evGross+mkGross-ded);
 }
 
 function getSathisObForYear(yr){
@@ -4440,8 +4466,13 @@ function getSathisObForYear(yr){
   const yob=getSathisYearOb();
   const entry=yob[yr]||{};
   const prevYr=String(+yr-1);
-  const autoVal=(yob[prevYr]||{}).auto||0;
-  return entry.override!=null ? entry.override : autoVal;
+  let autoVal=(yob[prevYr]||{}).auto;
+  // Walk back through gaps if prevYr has no auto
+  if(autoVal==null){
+    const years=Object.keys(yob).map(Number).filter(y=>y<+yr).sort((a,b)=>b-a);
+    for(const y of years){if(yob[y].auto!=null){autoVal=yob[y].auto;break;}}
+  }
+  return entry.override!=null ? entry.override : (autoVal||0);
 }
 
 function getSathisObAllTime(){
@@ -4644,7 +4675,7 @@ function renderAccountDashboard(){
   const poolAcctDEl=document.getElementById('company-pool-acct-detail');
   const poolTotEl=document.getElementById('company-pool-total');
   if(poolCashEl){poolCashEl.textContent=fmt(netCash);poolCashEl.style.color=netCash>=0?'var(--success)':'var(--danger)';}
-  if(poolCashDEl)poolCashDEl.textContent=`From events: ${fmt(s.ngCash+s.gstCash)} · Purchases: −${fmt(s.purchaseCash)}`;
+  if(poolCashDEl)poolCashDEl.textContent=`From events: ${fmt(s.ngCash+s.gstCash)}${s.gstCollectedInCash>0?' · GST(cash): +'+fmt(s.gstCollectedInCash):''} · Purchases: −${fmt(s.purchaseCash)}`;
   if(poolAcctEl){poolAcctEl.textContent=fmt(netAcct);poolAcctEl.style.color=netAcct>=0?'#1A4A8A':'var(--danger)';}
   if(poolAcctDEl)poolAcctDEl.textContent=`GST collected: +${fmt(s.gstCollectedInAccount)} · Purchases/GST paid deducted`;
   if(poolTotEl){poolTotEl.textContent=fmt(netCombined);poolTotEl.style.color=netCombined>=0?'var(--success)':'var(--danger)';}
