@@ -49,12 +49,12 @@ h1,h2,h3{font-family:'Playfair Display',serif}
 .action-btn.danger:hover{background:#FDE8E8}
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:flex-start;justify-content:center;padding:30px 16px;z-index:1000;overflow-y:auto}
 .modal-bg.hidden{display:none}
-.modal{background:#fff;border-radius:14px;width:100%;max-width:700px;border-top:3px solid var(--gold)}
+.modal{background:#fff;border-radius:14px;width:100%;max-width:700px;border-top:3px solid var(--gold);max-height:90vh;display:flex;flex-direction:column}
 .modal-head{display:flex;align-items:center;justify-content:space-between;padding:16px 22px;border-bottom:1px solid var(--border)}
 .modal-title{font-size:16px;font-family:'Playfair Display',serif}
 .modal-close{width:28px;height:28px;border-radius:50%;border:1px solid var(--border);background:#fff;cursor:pointer;font-size:16px;color:var(--muted);line-height:1}
 .modal-close:hover{background:var(--surface)}
-.modal-body{padding:20px 22px}
+.modal-body{padding:20px 22px;overflow-y:auto;flex:1}
 .modal-foot{padding:13px 22px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:13px}
 .form-group{display:flex;flex-direction:column;gap:5px}
@@ -126,7 +126,6 @@ input[type=number]{-moz-appearance:textfield}
 .nav-tab:hover:not(.active){color:#fff;border-color:#555;background:rgba(255,255,255,.06)}
 
 /* Modal — center vertically, smoother entry */
-.modal-bg{align-items:center}
 .modal{animation:modalIn .18s cubic-bezier(.34,1.4,.64,1)}
 @keyframes modalIn{from{opacity:0;transform:scale(.96) translateY(-8px)}to{opacity:1;transform:scale(1) translateY(0)}}
 
