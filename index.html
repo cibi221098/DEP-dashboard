@@ -3219,10 +3219,12 @@ function renderDashboard(){
   const ngEvents=fyFilterArr(state.events||[],fy);
   const gstEvents=fyFilterArr(state.gstEntries||[],fy);
 
-  const ngNotPaid=ngEvents.filter(e=>e.balanceStatus==='Pending');
-  const gstNotPaid=gstEvents.filter(e=>e.balanceStatus==='Pending');
-  const ngAdvPending=ngNotPaid.reduce((a,e)=>a+(e.advance||0),0);
-  const gstAdvPending=gstNotPaid.reduce((a,e)=>a+(e.advance||0),0);
+  const ngNotPaid=ngEvents.filter(e=>e.balanceStatus==='Pending'||e.balanceStatus==='Partially Paid');
+  const gstNotPaid=gstEvents.filter(e=>e.balanceStatus==='Pending'||e.balanceStatus==='Partially Paid');
+  const ngPending=ngEvents.filter(e=>e.balanceStatus==='Pending');
+  const gstPending=gstEvents.filter(e=>e.balanceStatus==='Pending');
+  const ngAdvPending=ngPending.reduce((a,e)=>a+(e.advance||0),0);
+  const gstAdvPending=gstPending.reduce((a,e)=>a+(e.advance||0),0);
   const gstProfit=s.gstEvProfit+s.gstMkProfit;
   const gstCollectedInAccount=s.gstCollectedInAccount;
   const ngProfit=s.ngProfit;
@@ -3302,7 +3304,7 @@ function renderDashboard(){
     <div style="background:#161B25;border:1px solid #252B38;border-radius:10px;padding:14px">
       <div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px">Advance Held</div>
       <div style="font-size:22px;font-weight:700;color:#A78BFA">${fmt(totalAdvPending)}</div>
-      <div style="font-size:11px;color:#555;margin-top:4px">From ${ngNotPaid.length+gstNotPaid.length} pending events</div>
+      <div style="font-size:11px;color:#555;margin-top:4px">From ${ngPending.length+gstPending.length} pending events</div>
     </div>
   `;
 
@@ -4776,8 +4778,8 @@ function renderPartnersSummary(){
   const obRagul=s.obRagul; const obAshwath=s.obAshwath; const obSathisPS=s.obSathis;
   const ragulDed=s.ragulDed; const ashwathDed=s.ashwathDed; const sathisDed=s.sathisDed;
   const ragulNet=s.ragulNet; const ashwathNet=s.ashwathNet; const sathisNet=s.sathisNet;
-  const obCash2=s.obCash||0; const obAcct2=s.obAcct||0;
-  const companyNet=s.companyNet||0;
+  const obCash2=s.obCompanyCash||0; const obAcct2=s.obCompanyAcct||0;
+  const companyNet=(s.companyCashNet||0)+(s.companyAcctNet||0);
 
   const tableEl=document.getElementById('partners-dist-table');
   if(!tableEl)return;
