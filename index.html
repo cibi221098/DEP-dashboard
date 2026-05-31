@@ -1902,7 +1902,7 @@ function renderSummary(filtered){
   const clientStillOwed=partial.reduce((a,e)=>a+(e.clientPending||0),0);
   const postProdPendingEvents=filtered.filter(e=>(e.postProdExpense||0)>0&&!e.postProdDone);
   const postProdPendingAmt=postProdPendingEvents.reduce((a,e)=>a+(e.postProdExpense||0),0);
-  const companyCash=profitUnlocked.filter(e=>e.companyMethod==='Cash').reduce((a,e)=>a+calcTotals(e).company,0);
+  const companyCash=profitUnlocked.filter(e=>(e.companyMethod||'Cash')==='Cash').reduce((a,e)=>a+calcTotals(e).company,0);
   const companyAcct=profitUnlocked.filter(e=>e.companyMethod==='Account').reduce((a,e)=>a+calcTotals(e).company,0);
   document.getElementById('summary-cards').innerHTML=`
     <div class="scard"><div class="scard-label">Total Events</div><div class="scard-val">${filtered.length}</div><div class="scard-sub">${paid.length} paid · ${partial.length} partial · ${pending.length} pending</div></div>
@@ -2208,7 +2208,7 @@ function renderGstSummary(filtered){
   const postProdPendingEvents=filtered.filter(e=>(e.postProdExpense||0)>0&&!e.postProdDone);
   const postProdPendingAmt=postProdPendingEvents.reduce((a,e)=>a+(e.postProdExpense||0),0);
   // Company split (events only, cash vs account)
-  const evCash=evPaid.concat(evPartial).filter(e=>e.companyMethod==='Cash').reduce((a,e)=>a+calcGstTotals(e).company,0);
+  const evCash=evPaid.concat(evPartial).filter(e=>(e.companyMethod||'Cash')==='Cash').reduce((a,e)=>a+calcGstTotals(e).company,0);
   const evAcct=evPaid.concat(evPartial).filter(e=>e.companyMethod==='Account').reduce((a,e)=>a+calcGstTotals(e).company,0);
   // Sathis: events 45% + marketing 100%
   const sathisEv=evProfit*SPLIT.sathis;
@@ -2936,8 +2936,8 @@ function calcYearNetCash(yr){
   const ngPaid=(state.events||[]).filter(e=>isPaidOrPartial(e)&&e.date&&e.date.startsWith(yr));
   const gstPaid=(state.gstEntries||[]).filter(e=>isPaidOrPartial(e)&&e.date&&e.date.startsWith(yr));
   const gstEvPaid=gstPaid.filter(e=>e.bizType!=='Marketing');
-  const ngCash=ngPaid.filter(e=>e.companyMethod==='Cash').reduce((a,e)=>a+calcTotals(e).profit*SPLIT.company,0);
-  const gstCash=gstEvPaid.filter(e=>e.companyMethod==='Cash').reduce((a,e)=>a+calcGstTotals(e).profit*SPLIT.company,0);
+  const ngCash=ngPaid.filter(e=>(e.companyMethod||'Cash')==='Cash').reduce((a,e)=>a+calcTotals(e).profit*SPLIT.company,0);
+  const gstCash=gstEvPaid.filter(e=>(e.companyMethod||'Cash')==='Cash').reduce((a,e)=>a+calcGstTotals(e).profit*SPLIT.company,0);
   const allPurchases=getCompanyPurchases().filter(p=>p.date&&p.date.startsWith(yr));
   const purchaseCash=allPurchases.filter(p=>p.payMethod==='Cash'||!p.payMethod).reduce((a,p)=>a+(p.amount||0),0);
   // Also carry forward previous year's opening cash
@@ -3140,9 +3140,9 @@ function getPaidSnapshot(fy){
   const evProfit=ngProfit+gstEvProfit; // combined event profit (excl. marketing)
 
   // ── Company 15% split by payment method ──
-  const ngCash=ngPaid.filter(e=>e.companyMethod==='Cash').reduce((a,e)=>a+calcTotals(e).profit*SPLIT.company,0);
+  const ngCash=ngPaid.filter(e=>(e.companyMethod||'Cash')==='Cash').reduce((a,e)=>a+calcTotals(e).profit*SPLIT.company,0);
   const ngAcct=ngPaid.filter(e=>e.companyMethod==='Account').reduce((a,e)=>a+calcTotals(e).profit*SPLIT.company,0);
-  const gstCash=gstEvPaid.filter(e=>e.companyMethod==='Cash').reduce((a,e)=>a+calcGstTotals(e).profit*SPLIT.company,0);
+  const gstCash=gstEvPaid.filter(e=>(e.companyMethod||'Cash')==='Cash').reduce((a,e)=>a+calcGstTotals(e).profit*SPLIT.company,0);
   const gstAcct=gstEvPaid.filter(e=>e.companyMethod==='Account').reduce((a,e)=>a+calcGstTotals(e).profit*SPLIT.company,0);
   const companyCash=ngCash+gstCash;
   const companyAcct=ngAcct+gstAcct;
@@ -4130,9 +4130,9 @@ function renderCompanyOverallView(){
   const allNgPaid=(state.events||[]).filter(isPaidOrPartial);
   const allGstPaid=(state.gstEntries||[]).filter(isPaidOrPartial);
   const allGstEvPaid=allGstPaid.filter(e=>e.bizType!=='Marketing');
-  const allNgCash=allNgPaid.filter(e=>e.companyMethod==='Cash').reduce((a,e)=>a+calcTotals(e).profit*SPLIT.company,0);
+  const allNgCash=allNgPaid.filter(e=>(e.companyMethod||'Cash')==='Cash').reduce((a,e)=>a+calcTotals(e).profit*SPLIT.company,0);
   const allNgAcct=allNgPaid.filter(e=>e.companyMethod==='Account').reduce((a,e)=>a+calcTotals(e).profit*SPLIT.company,0);
-  const allGstCash=allGstEvPaid.filter(e=>e.companyMethod==='Cash').reduce((a,e)=>a+calcGstTotals(e).profit*SPLIT.company,0);
+  const allGstCash=allGstEvPaid.filter(e=>(e.companyMethod||'Cash')==='Cash').reduce((a,e)=>a+calcGstTotals(e).profit*SPLIT.company,0);
   const allGstAcct=allGstEvPaid.filter(e=>e.companyMethod==='Account').reduce((a,e)=>a+calcGstTotals(e).profit*SPLIT.company,0);
   const allGstCollected=allGstPaid.reduce((a,e)=>a+Math.round((e.total||0)*0.18),0);
   const allPurchases=getCompanyPurchases();
