@@ -1107,6 +1107,10 @@ div[style*="dedEntryCard"],div[style*="border-radius:8px;margin-bottom:7px"]{tra
           <select id="f-type"></select>
         </div>
         <div class="form-group">
+          <label>Coordinator</label>
+          <select id="f-coordinator"><option value="">— Select —</option></select>
+        </div>
+        <div class="form-group">
           <label>Event Date <span style="color:var(--danger)">*</span></label>
           <input type="date" id="f-date">
         </div>
@@ -1831,11 +1835,18 @@ function showClientSuggestions(inputId,dropId,val){
   if(!filtered.length){drop.style.display='none';return;}
   drop.style.display='block';
   const allEvs=(state.events||[]).concat(state.gstEntries||[]);
-  drop.innerHTML=filtered.slice(0,10).map(name=>{
+  drop.innerHTML='';
+  filtered.slice(0,10).forEach(name=>{
     const count=allEvs.filter(e=>(e.client||'').trim()===name).length;
-    const badge=count>=2?`<span style="font-size:10px;background:#FEF0DC;color:#996B00;border-radius:12px;padding:1px 8px;font-weight:600">${count}×</span>`:'';
-    return`<div onclick="pickClientSuggestion('${inputId}','${dropId}','${name.replace(/'/g,"\\'")}');event.preventDefault()" style="padding:9px 14px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--gold-pale)'" onmouseout="this.style.background='#fff'"><span>${name}</span>${badge}</div>`;
-  }).join('');
+    const div=document.createElement('div');
+    div.style.cssText='padding:9px 14px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)';
+    div.addEventListener('mouseenter',()=>div.style.background='var(--gold-pale)');
+    div.addEventListener('mouseleave',()=>div.style.background='#fff');
+    div.addEventListener('mousedown',(e)=>{e.preventDefault();pickClientSuggestion(inputId,dropId,name);});
+    const span=document.createElement('span');span.textContent=name;div.appendChild(span);
+    if(count>=2){const b=document.createElement('span');b.style.cssText='font-size:10px;background:#FEF0DC;color:#996B00;border-radius:12px;padding:1px 8px;font-weight:600';b.textContent=count+'×';div.appendChild(b);}
+    drop.appendChild(div);
+  });
 }
 function pickClientSuggestion(inputId,dropId,name){
   const inp=document.getElementById(inputId);
@@ -1971,6 +1982,9 @@ function renderTable(){
 function deleteEvent(id){
   if(!confirm('Delete this event?'))return;
   state.events=state.events.filter(e=>e.id!==id);
+  // Clean up orphan installment records
+  if(state.installments)state.installments=state.installments.filter(x=>!(x.evId===id&&x.evSource==='Non-GST'));
+  saveInstallmentsDb();
   deleteEventDb(id);renderTable();showToast('Event deleted');
 }
 
@@ -1991,9 +2005,12 @@ function closeModal(){document.getElementById('event-modal').classList.add('hidd
 
 function populateFormSelects(){
   document.getElementById('f-type').innerHTML=state.types.map(t=>`<option>${t}</option>`).join('');
+  const coords=state.coordinators||[];
+  document.getElementById('f-coordinator').innerHTML='<option value="">— Select —</option>'+coords.map(c=>`<option>${c}</option>`).join('');
 }
 function clearForm(){
   ['f-client','f-phone','f-date','f-adv-date','f-bal-date','f-postprod-date'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('f-coordinator').value='';
   ['f-total','f-advance','f-balance','f-postprod-expense'].forEach(id=>document.getElementById(id).value='');
   const bsSel=document.getElementById('f-balance-status');
   bsSel.value='Pending';bsSel.className='status-select pending';
@@ -2028,6 +2045,7 @@ function loadForm(ev){
     document.getElementById('f-client-pending').value=ev.clientPending||'';
   }
   if(ev.companyMethod)document.getElementById('f-company-method').value=ev.companyMethod;
+  if(ev.coordinator)document.getElementById('f-coordinator').value=ev.coordinator;
   document.getElementById('expense-items').innerHTML='';
   (ev.expenses||[]).forEach(e=>addExpenseRow(e));
   document.getElementById('vendor-items').innerHTML='';
@@ -2133,20 +2151,25 @@ function saveEvent(){
   const month=date?MONTHS[new Date(date).getMonth()]:'';
   const isPaid=document.getElementById('f-balance-status').value==='Paid';
   const isPartial=document.getElementById('f-balance-status').value==='Partially Paid';
-  const ev={id:state.editingId||'',client,phone:document.getElementById('f-phone').value.trim(),type:document.getElementById('f-type').value,date,month,
+  const ev={id:state.editingId||'',client,phone:document.getElementById('f-phone').value.trim(),type:document.getElementById('f-type').value,coordinator:document.getElementById('f-coordinator').value,date,month,
     total,advance:+document.getElementById('f-advance').value||0,
     advDate:document.getElementById('f-adv-date').value,balanceStatus:document.getElementById('f-balance-status').value,
     balDate:document.getElementById('f-bal-date').value,
     amountReceived:isPartial?+document.getElementById('f-amount-received').value||0:null,
     clientPending:isPartial?+document.getElementById('f-client-pending').value||0:null,
-    companyMethod:isPaid?document.getElementById('f-company-method').value:'',
+    companyMethod:(isPaid||isPartial)?document.getElementById('f-company-method').value:'Cash',
     postProdExpense:+document.getElementById('f-postprod-expense').value||0,
     postProdDate:document.getElementById('f-postprod-date').value,
     postProdDone:document.getElementById('f-postprod-done').checked,
     expenses:getFormExpenses(),vendors:getFormVendors()};
   if(state.editingId){const idx=state.events.findIndex(e=>e.id===state.editingId);if(idx>=0)state.events[idx]=ev;}
-  else{ev.id='#'+(state.events.length+1);state.events.push(ev);}
+  else{
+    const maxId=Math.max(0,...(state.events||[]).map(e=>parseInt((e.id||'').replace(/^#/,''))||0));
+    ev.id='#'+(maxId+1);state.events.push(ev);
+  }
   saveEventDb(ev);closeModal();renderTable();
+  recalcAllCarryForward();recalcAllPartnerCarryForward();recalcSathisCarryForward();
+  if(document.getElementById('tab-dashboard')&&!document.getElementById('tab-dashboard').classList.contains('hidden'))renderDashboard();
   showToast(state.editingId?'Event updated!':'Event added!');
 }
 
@@ -2303,6 +2326,9 @@ function renderGstTable(){
 function deleteGstEntry(id){
   if(!confirm('Delete this entry?'))return;
   state.gstEntries=state.gstEntries.filter(e=>e.id!==id);
+  // Clean up orphan installment records
+  if(state.installments)state.installments=state.installments.filter(x=>!(x.evId===id&&x.evSource==='GST'));
+  saveInstallmentsDb();
   deleteGstEntryDb(id);renderGstTable();showToast('Entry deleted');
 }
 
@@ -2362,7 +2388,7 @@ function loadGstForm(ev){
   document.getElementById('gf-tds').value=ev.tds||'';
   document.getElementById('gf-advance').value=ev.advance||'';
   document.getElementById('gf-adv-date').value=ev.advDate||'';
-  document.getElementById('gf-balance').value=(ev.total||0)-(ev.advance||0);
+  document.getElementById('gf-balance').value=Math.max(0,((ev.total||0)+Math.round((ev.total||0)*0.18))-(ev.advance||0));
   const gbs=document.getElementById('gf-balance-status');
   gbs.value=ev.balanceStatus||'Pending';
   const gbsCls=gbs.value==='Paid'?'paid':gbs.value==='Partially Paid'?'partial':'pending';
@@ -2396,8 +2422,10 @@ function loadGstForm(ev){
 function gstRecalcBalance(){
   const t=+document.getElementById('gf-total').value||0;
   const a=+document.getElementById('gf-advance').value||0;
-  document.getElementById('gf-gst').value=Math.round(t*0.18);
-  document.getElementById('gf-balance').value=Math.max(0,t-a);
+  const gst=Math.round(t*0.18);
+  const grandTotal=t+gst;
+  document.getElementById('gf-gst').value=gst;
+  document.getElementById('gf-balance').value=Math.max(0,grandTotal-a);
   if(document.getElementById('gf-balance-status').value==='Partially Paid') recalcGstClientPending();
   gstRecalcProfit();
 }
@@ -2484,15 +2512,20 @@ function saveGstEntry(){
     balDate:document.getElementById('gf-bal-date').value,
     amountReceived:isPartial?+document.getElementById('gf-amount-received').value||0:null,
     clientPending:isPartial?+document.getElementById('gf-client-pending').value||0:null,
-    companyMethod:(isPaid&&!isMk)?document.getElementById('gf-company-method').value:'',
+    companyMethod:((isPaid||isPartial)&&!isMk)?document.getElementById('gf-company-method').value:'Cash',
     postProdExpense:+document.getElementById('gf-postprod-expense').value||0,
     postProdDate:document.getElementById('gf-postprod-date').value,
     postProdDone:document.getElementById('gf-postprod-done').checked,
     expenses:getGstFormExpenses(),vendors:getGstFormVendors()};
   if(!state.gstEntries)state.gstEntries=[];
   if(state.gstEditingId){const idx=state.gstEntries.findIndex(e=>e.id===state.gstEditingId);if(idx>=0)state.gstEntries[idx]=ev;}
-  else{ev.id='G#'+(state.gstEntries.length+1);state.gstEntries.push(ev);}
+  else{
+    const maxGId=Math.max(0,...(state.gstEntries||[]).map(e=>parseInt((e.id||'').replace(/^G#/,''))||0));
+    ev.id='G#'+(maxGId+1);state.gstEntries.push(ev);
+  }
   saveGstEntryDb(ev);closeGstModal();renderGstTable();
+  recalcAllCarryForward();recalcAllPartnerCarryForward();recalcSathisCarryForward();
+  if(document.getElementById('tab-dashboard')&&!document.getElementById('tab-dashboard').classList.contains('hidden'))renderDashboard();
   showToast(state.gstEditingId?'Entry updated!':'GST Entry added!');
 }
 
@@ -3576,15 +3609,16 @@ function renderAnalytics(){
     </div>`;
   }
 
+  const _fyLabels=getAllFyLabels();
   const allNGFull=(state.events||[]).filter(e=>(e.balanceStatus==='Paid'||e.balanceStatus==='Partially Paid')&&e.date);
   const allGSTFull=(state.gstEntries||[]).filter(e=>(e.balanceStatus==='Paid'||e.balanceStatus==='Partially Paid')&&e.bizType!=='Marketing'&&e.date);
-  const yoyYears=[...new Set([...allNGFull.map(e=>e.date.slice(0,4)),...allGSTFull.map(e=>e.date.slice(0,4))])].sort();
+  const yoyYears=_fyLabels.length?_fyLabels:[...new Set([...allNGFull.map(e=>e.date.slice(0,4)),...allGSTFull.map(e=>e.date.slice(0,4))])].sort();
   const yoyData=yoyYears.map(y=>{
-    const ng=allNGFull.filter(e=>e.date.startsWith(y));
-    const gs=allGSTFull.filter(e=>e.date.startsWith(y));
+    const ng=fyFilterArr(allNGFull,y);
+    const gs=fyFilterArr(allGSTFull,y);
     const rev=ng.reduce((a,e)=>a+(e.total||0),0)+gs.reduce((a,e)=>a+(e.total||0),0);
     const profit=ng.reduce((a,e)=>a+calcTotals(e).profit,0)+gs.reduce((a,e)=>a+calcGstTotals(e).profit,0);
-    return{year:y,count:ng.length+gs.length,revenue:rev,profit:Math.round(profit)};
+    return{year:y.includes('-')?'FY '+y:y,count:ng.length+gs.length,revenue:rev,profit:Math.round(profit)};
   });
 
   const yoyEl=document.getElementById('analytics-yoy');
@@ -3669,7 +3703,7 @@ function renderAnalytics(){
   if(repeatEl){
     const allEvsFull=(state.events||[]).concat(state.gstEntries||[]);
     const cMap={};
-    allEvsFull.forEach(e=>{const k=(e.client||'').trim();if(k){if(!cMap[k])cMap[k]={count:0,revenue:0,last:''};cMap[k].count++;cMap[k].revenue+=(e.total||0);if(!cMap[k].last||e.date>cMap[k].last)cMap[k].last=e.date||'';}});
+    allEvsFull.forEach(e=>{const k=(e.client||'').trim();if(k){if(!cMap[k])cMap[k]={count:0,revenue:0,last:'',paid:0};cMap[k].count++;if(e.balanceStatus==='Paid'||e.balanceStatus==='Partially Paid'){cMap[k].revenue+=(e.total||0);cMap[k].paid++;}if(!cMap[k].last||e.date>cMap[k].last)cMap[k].last=e.date||'';}});
     const repeats=Object.entries(cMap).filter(([,v])=>v.count>=2).sort((a,b)=>b[1].count-a[1].count);
     if(!repeats.length){
       repeatEl.innerHTML='<div style="text-align:center;padding:24px;color:#666;font-size:13px">No repeat clients yet.<br><span style="font-size:11px">Clients with 2+ events will appear here.</span></div>';
@@ -4041,22 +4075,16 @@ function renderGstSummaryTable(){
 
   gstEntries.forEach(e=>{
     const m=e.month;if(!m||!map[m])return;
-    map[m].collected+=Math.round((e.total||0)*0.18);
+    // GST collected: only count paid/partial events (money actually received)
+    if(e.balanceStatus==='Paid'||e.balanceStatus==='Partially Paid'){
+      map[m].collected+=Math.round((e.total||0)*0.18);
+      map[m].billsPaid++;
+    } else {
+      map[m].billsNotPaid++;
+    }
     map[m].billsAll++;
-    if(e.balanceStatus==='Paid'||e.balanceStatus==='Partially Paid')map[m].billsPaid++;
-    else map[m].billsNotPaid++;
-    // Input credit from Account-paid expenses within each GST entry
-    const accExp=((e.expenses||[]).filter(x=>x.payMethod==='Account').reduce((a,x)=>a+(+x.amount||0),0))
-               + ((e.vendors||[]).filter(x=>x.payMethod==='Account').reduce((a,x)=>a+(+x.payment||0),0));
-    map[m].inputCredit+=Math.round(accExp*0.18);
-  });
-  // Also include Non-GST events' Account-paid expenses for input credit
-  const ngEntries=fyFilterArr(state.events||[],fy);
-  ngEntries.forEach(e=>{
-    const m=e.month;if(!m||!map[m])return;
-    const accExp=((e.expenses||[]).filter(x=>x.payMethod==='Account').reduce((a,x)=>a+(+x.amount||0),0))
-               + ((e.vendors||[]).filter(x=>x.payMethod==='Account').reduce((a,x)=>a+(+x.payment||0),0));
-    map[m].inputCredit+=Math.round(accExp*0.18);
+    // Note: event-level expenses/vendors have no payMethod field, so input credit
+    // only comes from company purchases (handled below)
   });
   // Company purchases (from deductions tab) — only Account-paid GST bills give input credit
   const purchases=fyFilterArr(getCompanyPurchases(),fy);
@@ -5081,8 +5109,9 @@ function renderExpenseBreakdown(){
   const el=document.getElementById('st-expense-content');
 
   let events=[], gstevs=[];
-  if(source!=='gst') events=fyFilterArr(state.events||[],fy);
-  if(source!=='nongst') gstevs=fyFilterArr(state.gstEntries||[],fy);
+  const isPaidOrPartialFn=e=>e.balanceStatus==='Paid'||e.balanceStatus==='Partially Paid';
+  if(source!=='gst') events=fyFilterArr(state.events||[],fy).filter(isPaidOrPartialFn);
+  if(source!=='nongst') gstevs=fyFilterArr(state.gstEntries||[],fy).filter(isPaidOrPartialFn);
   const all=[...events,...gstevs];
 
   // Aggregate expense categories
