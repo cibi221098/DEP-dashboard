@@ -5655,7 +5655,22 @@ function closeEvDetail(){
 
 // ── ASYNC BOOT ────────────────────────────────────────────────────
 (async function boot(){
-  await loadAllFromSupabase();
+  try{
+    await loadAllFromSupabase();
+  }catch(err){
+    console.error('Failed to load from Supabase:',err);
+    const ol=document.getElementById('sb-overlay');
+    if(ol){
+      ol.innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:16px">
+        <div style="font-size:32px">⚠️</div>
+        <div style="font-family:'Playfair Display',serif;font-size:20px;color:#F5C842">Connection Failed</div>
+        <div style="font-size:13px;color:#aaa;max-width:340px;text-align:center">Could not connect to the database. Check your internet connection and try again.</div>
+        <button onclick="location.reload()" style="padding:10px 24px;background:var(--gold);color:#000;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">🔄 Retry</button>
+        <div style="font-size:11px;color:#555">${err.message||'Unknown error'}</div>
+      </div>`;
+    }
+    return;
+  }
   hideLoadingOverlay();
   ['events','nongst','gst','deductions','partners','account','smarttools','config'].forEach(id=>{
     const el=document.getElementById('tab-'+id);
