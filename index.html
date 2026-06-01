@@ -1288,7 +1288,7 @@ div[style*="dedEntryCard"],div[style*="border-radius:8px;margin-bottom:7px"]{tra
         </div>
         <div class="form-group">
           <label>GST 18% (₹) <span class="gst-auto-tag">Auto</span></label>
-          <input type="number" id="gf-gst" readonly style="background:var(--surface);color:var(--muted)" placeholder="Auto-calculated">
+          <input type="number" id="gf-gst" readonly style="background:var(--surface);color:var(--muted)" placeholder="Auto-calculated" value="0">
         </div>
         <div class="form-group">
           <label>TDS Deducted (₹)</label>
@@ -1316,7 +1316,7 @@ div[style*="dedEntryCard"],div[style*="border-radius:8px;margin-bottom:7px"]{tra
         </div>
         <div class="form-group" id="gf-amount-received-wrap" style="display:none">
           <label>Amount Received (₹)</label>
-          <input type="number" id="gf-amount-received" placeholder="₹0" oninput="gstRecalcProfit()" min="0">
+          <input type="number" id="gf-amount-received" placeholder="₹0" oninput="recalcGstClientPending();gstRecalcProfit()" min="0">
         </div>
         <div class="form-group" id="gf-client-pending-wrap" style="display:none">
           <label style="color:#6B1AB5">Client Still Owes (₹)</label>
@@ -2031,7 +2031,7 @@ function loadForm(ev){
   document.getElementById('f-total').value=ev.total||'';
   document.getElementById('f-advance').value=ev.advance||'';
   document.getElementById('f-adv-date').value=ev.advDate||'';
-  document.getElementById('f-balance').value=(ev.total||0)-(ev.advance||0);
+  document.getElementById('f-balance').value=ev.balanceStatus==='Paid'?0:Math.max(0,(ev.total||0)-(ev.advance||0));
   const bsSel=document.getElementById('f-balance-status');
   bsSel.value=ev.balanceStatus||'Pending';
   const bsCls=bsSel.value==='Paid'?'paid':bsSel.value==='Partially Paid'?'partial':'pending';
@@ -2063,9 +2063,15 @@ function onBalStatusChange(){
   const cls=st==='Paid'?'paid':st==='Partially Paid'?'partial':'pending';
   document.getElementById('f-balance-status').className='status-select '+cls;
   const isPartial=st==='Partially Paid';
+  const isPaid=st==='Paid';
   document.getElementById('f-amount-received-wrap').style.display=isPartial?'':'none';
   document.getElementById('f-client-pending-wrap').style.display=isPartial?'':'none';
+  // Update balance field: 0 when Paid, total-advance otherwise
+  const t=+document.getElementById('f-total').value||0;
+  const a=+document.getElementById('f-advance').value||0;
+  document.getElementById('f-balance').value=isPaid?0:Math.max(0,t-a);
   if(isPartial) recalcClientPending();
+  recalcProfit();
 }
 function recalcClientPending(){
   const bal=+document.getElementById('f-balance').value||0;
@@ -2078,9 +2084,16 @@ function onGstBalStatusChange(){
   const cls=st==='Paid'?'paid':st==='Partially Paid'?'partial':'pending';
   document.getElementById('gf-balance-status').className='status-select '+cls;
   const isPartial=st==='Partially Paid';
+  const isPaid=st==='Paid';
   document.getElementById('gf-amount-received-wrap').style.display=isPartial?'':'none';
   document.getElementById('gf-client-pending-wrap').style.display=isPartial?'':'none';
+  // Recalc balance: 0 when Paid, grandTotal-advance otherwise
+  const t=+document.getElementById('gf-total').value||0;
+  const a=+document.getElementById('gf-advance').value||0;
+  const grandTotal=t+Math.round(t*0.18);
+  document.getElementById('gf-balance').value=isPaid?0:Math.max(0,grandTotal-a);
   if(isPartial) recalcGstClientPending();
+  gstRecalcProfit();
 }
 function recalcGstClientPending(){
   const bal=+document.getElementById('gf-balance').value||0;
@@ -2091,8 +2104,9 @@ function recalcGstClientPending(){
 function recalcBalance(){
   const t=+document.getElementById('f-total').value||0;
   const a=+document.getElementById('f-advance').value||0;
-  document.getElementById('f-balance').value=Math.max(0,t-a);
-  if(document.getElementById('f-balance-status').value==='Partially Paid') recalcClientPending();
+  const st=document.getElementById('f-balance-status').value;
+  document.getElementById('f-balance').value=st==='Paid'?0:Math.max(0,t-a);
+  if(st==='Partially Paid') recalcClientPending();
   recalcProfit();
 }
 function getFormExpenses(){return[...document.querySelectorAll('#expense-items .exp-row')].map(r=>({type:r.querySelector('.exp-type').value,note:r.querySelector('.exp-note').value,amount:+r.querySelector('.exp-amount').value||0}));}
@@ -2119,7 +2133,9 @@ function recalcProfit(){
   if(isPartial) recalcClientPending();
   document.getElementById('ps-revenue').textContent=fmt(total);
   document.getElementById('ps-expenses').textContent=fmt(exp);
-  document.getElementById('ps-profit').textContent=fmt(profit);
+  const psEl=document.getElementById('ps-profit');
+  psEl.textContent=fmt(profit);
+  psEl.style.color=profit<0?'var(--danger)':profit>0?'#3DD68C':'#fff';
   document.getElementById('ps-note').textContent=profitUnlocked?'Distribution unlocked':'Set balance to Paid or Partially Paid to calculate profit';
   document.getElementById('profit-split-box').classList.toggle('hidden',!profitUnlocked);
   if(profitUnlocked){
@@ -2361,8 +2377,9 @@ function onGstBizChange(){
 
 function clearGstForm(){
   ['gf-client','gf-phone','gf-date','gf-adv-date','gf-bal-date','gf-bill','gf-postprod-date'].forEach(id=>document.getElementById(id).value='');
-  ['gf-total','gf-advance','gf-balance','gf-tds','gf-postprod-expense'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('gf-gst').value='';
+  ['gf-total','gf-advance','gf-balance','gf-tds','gf-postprod-expense','gf-amount-received','gf-client-pending'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('gf-gst').value='0';
+  document.getElementById('gf-company-method').value='Cash';
   const gbs=document.getElementById('gf-balance-status');
   gbs.value='Pending';gbs.className='status-select pending';
   document.getElementById('gf-amount-received-wrap').style.display='none';
@@ -2388,7 +2405,8 @@ function loadGstForm(ev){
   document.getElementById('gf-tds').value=ev.tds||'';
   document.getElementById('gf-advance').value=ev.advance||'';
   document.getElementById('gf-adv-date').value=ev.advDate||'';
-  document.getElementById('gf-balance').value=Math.max(0,((ev.total||0)+Math.round((ev.total||0)*0.18))-(ev.advance||0));
+  const _gstGrand=(ev.total||0)+Math.round((ev.total||0)*0.18);
+  document.getElementById('gf-balance').value=ev.balanceStatus==='Paid'?0:Math.max(0,_gstGrand-(ev.advance||0));
   const gbs=document.getElementById('gf-balance-status');
   gbs.value=ev.balanceStatus||'Pending';
   const gbsCls=gbs.value==='Paid'?'paid':gbs.value==='Partially Paid'?'partial':'pending';
@@ -2424,9 +2442,10 @@ function gstRecalcBalance(){
   const a=+document.getElementById('gf-advance').value||0;
   const gst=Math.round(t*0.18);
   const grandTotal=t+gst;
-  document.getElementById('gf-gst').value=gst;
-  document.getElementById('gf-balance').value=Math.max(0,grandTotal-a);
-  if(document.getElementById('gf-balance-status').value==='Partially Paid') recalcGstClientPending();
+  const status=document.getElementById('gf-balance-status').value;
+  document.getElementById('gf-gst').value=gst||'';
+  document.getElementById('gf-balance').value=status==='Paid'?0:Math.max(0,grandTotal-a);
+  if(status==='Partially Paid') recalcGstClientPending();
   gstRecalcProfit();
 }
 
@@ -2461,7 +2480,9 @@ function gstRecalcProfit(){
   const tdsDom=document.getElementById('gps-tds');
   const tdsWrap=document.getElementById('gps-tds-wrap');
   if(tdsDom){tdsDom.textContent=fmt(tdsLive);if(tdsWrap)tdsWrap.style.opacity=tdsLive>0?'1':'0.4';}
-  document.getElementById('gps-profit').textContent=fmt(profit);
+  const profitEl=document.getElementById('gps-profit');
+  profitEl.textContent=fmt(profit);
+  profitEl.style.color=profit<0?'var(--danger)':profit>0?'#3DD68C':'#fff';
   document.getElementById('gps-note').textContent=profitUnlocked?'Distribution unlocked (TDS deducted from profit)':'Set balance to Paid or Partially Paid to calculate profit';
   document.getElementById('gst-profit-split-box').classList.toggle('hidden',!profitUnlocked);
   if(profitUnlocked){
