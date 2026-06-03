@@ -3015,10 +3015,9 @@ function calcYearNetCash(yr){
   const allPurchases=fyFilterArr(getCompanyPurchases(),fyLbl);
   const purchaseCash=allPurchases.filter(p=>p.payMethod==='Cash'||!p.payMethod).reduce((a,p)=>a+(p.amount||0),0);
   // Also carry forward previous year's opening cash
-  const gstCollectedCash=gstPaid.filter(e=>(e.companyMethod||'Cash')==='Cash').reduce((a,e)=>a+Math.round((e.total||0)*0.18),0);
   const prevYrOb=getObForYear(yr);
   const prevCash=prevYrOb.cash;
-  return Math.round(prevCash + ngCash + gstCash + gstCollectedCash - purchaseCash);
+  return Math.round(prevCash + ngCash + gstCash - purchaseCash); // GST always in account, not cash
 }
 
 function calcYearNetAcct(yr){
@@ -3029,7 +3028,7 @@ function calcYearNetAcct(yr){
   const gstEvPaid=gstPaid.filter(e=>e.bizType!=='Marketing');
   const ngAcct=ngPaid.filter(e=>e.companyMethod==='Account').reduce((a,e)=>a+calcTotals(e).profit*SPLIT.company,0);
   const gstAcct=gstEvPaid.filter(e=>e.companyMethod==='Account').reduce((a,e)=>a+calcGstTotals(e).profit*SPLIT.company,0);
-  const gstCollected=gstPaid.filter(e=>e.companyMethod==='Account'||!e.companyMethod||e.companyMethod==='').reduce((a,e)=>a+Math.round((e.total||0)*0.18),0);
+  const gstCollected=gstPaid.reduce((a,e)=>a+Math.round((e.total||0)*0.18),0); // GST always to account
   const allPurchases=fyFilterArr(getCompanyPurchases(),fyLbl);
   const purchaseAcctGst=allPurchases.filter(p=>p.payMethod==='Account'&&p.billType==='GST').reduce((a,p)=>a+(p.amount||0),0);
   const purchaseAcctNonGst=allPurchases.filter(p=>p.payMethod==='Account'&&p.billType!=='GST').reduce((a,p)=>a+(p.amount||0),0);
@@ -3239,9 +3238,9 @@ function getPaidSnapshot(fy){
   const sathisEvGross=evProfit*SPLIT.sathis;
   const sathisGross=sathisEvGross+gstMkProfit;
 
-  // ── GST collected (split by companyMethod) ──
-  const gstCollectedInAccount=gstPaid.filter(e=>e.companyMethod==='Account'||!e.companyMethod||e.companyMethod==='').reduce((a,e)=>a+Math.round((e.total||0)*0.18),0);
-  const gstCollectedInCash=gstPaid.filter(e=>(e.companyMethod||'Cash')==='Cash').reduce((a,e)=>a+Math.round((e.total||0)*0.18),0);
+  // ── GST collected (always to Account - GST 18% is a tax liability always held in bank account) ──
+  const gstCollectedInAccount=gstPaid.reduce((a,e)=>a+Math.round((e.total||0)*0.18),0);
+  const gstCollectedInCash=0; // GST is never held in cash pool
 
   // ── Purchases ──
   const allPurchases=fyFilterArr(getCompanyPurchases(),fy);
@@ -3271,7 +3270,7 @@ function getPaidSnapshot(fy){
   const sathisDed=filteredDed.filter(r=>r.person==='Sathis Kumar').reduce((a,r)=>a+r.amount,0);
 
   // ── Net pools ──
-  const companyCashNet=(companyCash+gstCollectedInCash+obCompanyCash)-purchaseCash;
+  const companyCashNet=(companyCash+obCompanyCash)-purchaseCash; // GST not in cash pool
   const companyAcctNet=(companyAcct+gstCollectedInAccount+obCompanyAcct)-purchaseAcctTotal-totalGstPaid;
   const ragulNet=(ragulGross+obRagul)-ragulDed;
   const ashwathNet=(ashwathGross+obAshwath)-ashwathDed;
@@ -4723,7 +4722,7 @@ function renderAccountDashboard(){
   const poolAcctDEl=document.getElementById('company-pool-acct-detail');
   const poolTotEl=document.getElementById('company-pool-total');
   if(poolCashEl){poolCashEl.textContent=fmt(netCash);poolCashEl.style.color=netCash>=0?'var(--success)':'var(--danger)';}
-  if(poolCashDEl)poolCashDEl.textContent=`From events: ${fmt(s.ngCash+s.gstCash)}${s.gstCollectedInCash>0?' · GST(cash): +'+fmt(s.gstCollectedInCash):''} · Purchases: −${fmt(s.purchaseCash)}`;
+  if(poolCashDEl)poolCashDEl.textContent=`From events: ${fmt(s.ngCash+s.gstCash)} · Purchases: −${fmt(s.purchaseCash)}`;
   if(poolAcctEl){poolAcctEl.textContent=fmt(netAcct);poolAcctEl.style.color=netAcct>=0?'#1A4A8A':'var(--danger)';}
   if(poolAcctDEl)poolAcctDEl.textContent=`GST collected: +${fmt(s.gstCollectedInAccount)} · Purchases/GST paid deducted`;
   if(poolTotEl){poolTotEl.textContent=fmt(netCombined);poolTotEl.style.color=netCombined>=0?'var(--success)':'var(--danger)';}
