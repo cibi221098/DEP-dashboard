@@ -5337,7 +5337,7 @@ function renderInstallmentLog(){
   }
   el.innerHTML=insts.map(rec=>{
     const total=rec.payments.reduce((s,p)=>s+(+p.amount||0),0);
-    const ev=[...(state.events||[]),...(state.gstEntries||[])].find(e=>e.id===rec.evId);
+    const ev=[...(state.events||[]),...(state.gstEntries||[])].find(e=>e.id==rec.evId);
     const bal=ev?waBalance(ev):0;
     return`<div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:14px">
       <div style="padding:11px 16px;background:var(--surface);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
@@ -5367,12 +5367,12 @@ function renderInstallmentLog(){
 }
 
 function openInstModal(evId,evSource){
-  const ev=[...(state.events||[]),...(state.gstEntries||[])].find(e=>e.id===evId);
+  const ev=[...(state.events||[]),...(state.gstEntries||[])].find(e=>e.id==evId);
   if(!ev)return;
   _instEditingId={evId,evSource};
   document.getElementById('inst-modal-title').textContent='Log Payment — '+ev.client;
   const bal=waBalance(ev);
-  const instData=getInstallments().find(x=>x.evId===evId&&x.evSource===evSource);
+  const instData=getInstallments().find(x=>x.evId==evId&&x.evSource===evSource);
   const instTotal=(instData?.payments||[]).reduce((s,p)=>s+(+p.amount||0),0);
   document.getElementById('inst-modal-event-info').innerHTML=`
     <div style="font-weight:600;font-size:14px;margin-bottom:4px">${ev.client}</div>
@@ -5394,11 +5394,11 @@ function closeInstModal(){document.getElementById('inst-modal').classList.add('h
 function instRecalc(){
   if(!_instEditingId)return;
   const {evId,evSource}=_instEditingId;
-  const ev=[...(state.events||[]),...(state.gstEntries||[])].find(e=>e.id===evId);
+  const ev=[...(state.events||[]),...(state.gstEntries||[])].find(e=>e.id==evId);
   if(!ev)return;
   const bal=waBalance(ev);
   const newAmt=+document.getElementById('inst-amount').value||0;
-  const instData=getInstallments().find(x=>x.evId===evId&&x.evSource===evSource);
+  const instData=getInstallments().find(x=>x.evId==evId&&x.evSource===evSource);
   const instTotal=(instData?.payments||[]).reduce((s,p)=>s+(+p.amount||0),0);
   const remaining=Math.max(0,bal-instTotal-newAmt);
   document.getElementById('inst-recalc-box').innerHTML=`
@@ -5420,8 +5420,9 @@ function saveInstallment(){
   const insts=getInstallments();
   const isGstSource = evSource==='GST';
   const evArr = isGstSource ? (state.gstEntries||[]) : (state.events||[]);
-  const ev=evArr.find(e=>e.id===evId);
-  let rec=insts.find(x=>x.evId===evId&&x.evSource===evSource);
+  // Use == not === because evId from template string may be "5" while ev.id from DB may be 5
+  const ev=evArr.find(e=>e.id==evId);
+  let rec=insts.find(x=>x.evId==evId&&x.evSource===evSource);
   if(!rec){
     rec={evId,evSource,client:ev?ev.client:'',evTotal:ev?ev.total:0,evDate:ev?ev.date:'',evType:ev?(ev.type||''):'',payments:[]};
     insts.push(rec);
@@ -5430,26 +5431,28 @@ function saveInstallment(){
   saveInstallmentsDb();
 
   // ── Sync payment to event record ──────────────────────────────────
-  if(ev){
-    const totalInstalled=rec.payments.reduce((s,p)=>s+(+p.amount||0),0);
-    const grandTotal = isGstSource
-      ? ((ev.total||0)+(ev.gst||0)-(ev.tds||0))
-      : (ev.total||0);
-    const rawBalance = grandTotal - (ev.advance||0) - totalInstalled;
-    if(rawBalance<=0){
-      ev.balanceStatus='Paid';
-      ev.amountReceived=(ev.advance||0)+totalInstalled;
-      ev.clientPending=0;
-    } else {
-      ev.balanceStatus='Partially Paid';
-      ev.amountReceived=(ev.advance||0)+totalInstalled;
-      ev.clientPending=rawBalance;
+  try {
+    if(ev){
+      const totalInstalled=rec.payments.reduce((s,p)=>s+(+p.amount||0),0);
+      const grandTotal = isGstSource
+        ? ((ev.total||0)+(ev.gst||0)-(ev.tds||0))
+        : (ev.total||0);
+      const rawBalance = grandTotal - (ev.advance||0) - totalInstalled;
+      if(rawBalance<=0){
+        ev.balanceStatus='Paid';
+        ev.amountReceived=(ev.advance||0)+totalInstalled;
+        ev.clientPending=0;
+      } else {
+        ev.balanceStatus='Partially Paid';
+        ev.amountReceived=(ev.advance||0)+totalInstalled;
+        ev.clientPending=rawBalance;
+      }
+      if(isGstSource) saveGstEntryDb(ev);
+      else saveEventDb(ev);
+      renderTable();
+      renderDashboard();
     }
-    if(isGstSource) saveGstEntryDb(ev);
-    else saveEventDb(ev);
-    renderTable();
-    renderDashboard();
-  }
+  } catch(e){ console.error('saveInstallment sync error:',e); }
   // ─────────────────────────────────────────────────────────────────
 
   showToast('Payment logged!');
@@ -5460,14 +5463,14 @@ function saveInstallment(){
 function deleteInstallment(evId,evSource,pid){
   if(!confirm('Delete this installment record?'))return;
   const insts=getInstallments();
-  const rec=insts.find(x=>x.evId===evId&&x.evSource===evSource);
+  const rec=insts.find(x=>x.evId==evId&&x.evSource===evSource);
   if(rec){rec.payments=rec.payments.filter(p=>p.id!==pid);}
   saveInstallmentsDb();
 
   // ── Re-sync event balance after deletion ──────────────────────────
   const isGstSource = evSource==='GST';
   const evArr = isGstSource ? (state.gstEntries||[]) : (state.events||[]);
-  const ev=evArr.find(e=>e.id===evId);
+  const ev=evArr.find(e=>e.id==evId);
   if(ev){
     const totalInstalled=(rec?.payments||[]).reduce((s,p)=>s+(+p.amount||0),0);
     const grandTotal = isGstSource
