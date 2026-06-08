@@ -1587,17 +1587,53 @@ function showLoadingOverlay(msg){let el=document.getElementById('sb-overlay');if
 function hideLoadingOverlay(){const el=document.getElementById('sb-overlay');if(el)el.remove();}
 
 function dbEventToState(r){return{id:r.id,client:r.client,phone:r.phone||'',type:r.type||'',date:r.date||'',month:r.month||'',coordinator:r.coordinator||'',total:r.total||0,advance:r.advance||0,advDate:r.adv_date||'',balanceStatus:r.balance_status||'Pending',balDate:r.bal_date||'',companyMethod:r.company_method||'Cash',expenses:r.expenses||[],vendors:r.vendors||[],postProdExpense:r.post_prod_expense||0,postProdDate:r.post_prod_date||'',postProdDone:r.post_prod_done||false,amountReceived:r.amount_received??null,clientPending:r.client_pending??null};}
-function stateEventToDb(ev){return{id:ev.id,client:ev.client,phone:ev.phone||'',type:ev.type||'',date:ev.date||null,month:ev.month||'',coordinator:ev.coordinator||'',total:ev.total||0,advance:ev.advance||0,adv_date:ev.advDate||null,balance_status:ev.balanceStatus||'Pending',bal_date:ev.balDate||null,company_method:ev.companyMethod||'Cash',expenses:ev.expenses||[],vendors:ev.vendors||[],post_prod_expense:ev.postProdExpense||0,post_prod_date:ev.postProdDate||null,post_prod_done:ev.postProdDone||false,amount_received:ev.amountReceived??null,client_pending:ev.clientPending??null};}
+function stateEventToDb(ev){return{id:ev.id,client:ev.client,phone:ev.phone||'',type:ev.type||'',date:ev.date||null,month:ev.month||'',coordinator:ev.coordinator||'',total:ev.total||0,advance:ev.advance||0,adv_date:ev.advDate||null,balance_status:ev.balanceStatus||'Pending',bal_date:ev.balDate||null,company_method:ev.companyMethod||'Cash',post_prod_expense:ev.postProdExpense||0,post_prod_date:ev.postProdDate||null,post_prod_done:ev.postProdDone||false,amount_received:ev.amountReceived??null,client_pending:ev.clientPending??null};}
 function dbGstToState(r){return{id:r.id,client:r.client,phone:r.phone||'',bizType:r.biz_type||'Events',type:r.type||'',bill:r.bill||'',date:r.date||'',month:r.month||'',total:r.total||0,gst:r.gst||0,tds:r.tds||0,advance:r.advance||0,advDate:r.adv_date||'',balanceStatus:r.balance_status||'Pending',balDate:r.bal_date||'',companyMethod:r.company_method||'Cash',expenses:r.expenses||[],vendors:r.vendors||[],postProdExpense:r.post_prod_expense||0,postProdDate:r.post_prod_date||'',postProdDone:r.post_prod_done||false,amountReceived:r.amount_received??null,clientPending:r.client_pending??null};}
-function stateGstToDb(ev){return{id:ev.id,client:ev.client,phone:ev.phone||'',biz_type:ev.bizType||'Events',type:ev.type||'',bill:ev.bill||'',date:ev.date||null,month:ev.month||'',total:ev.total||0,gst:ev.gst||0,tds:ev.tds||0,advance:ev.advance||0,adv_date:ev.advDate||null,balance_status:ev.balanceStatus||'Pending',bal_date:ev.balDate||null,company_method:ev.companyMethod||'Cash',expenses:ev.expenses||[],vendors:ev.vendors||[],post_prod_expense:ev.postProdExpense||0,post_prod_date:ev.postProdDate||null,post_prod_done:ev.postProdDone||false,amount_received:ev.amountReceived??null,client_pending:ev.clientPending??null};}
+function stateGstToDb(ev){return{id:ev.id,client:ev.client,phone:ev.phone||'',biz_type:ev.bizType||'Events',type:ev.type||'',bill:ev.bill||'',date:ev.date||null,month:ev.month||'',total:ev.total||0,gst:ev.gst||0,tds:ev.tds||0,advance:ev.advance||0,adv_date:ev.advDate||null,balance_status:ev.balanceStatus||'Pending',bal_date:ev.balDate||null,company_method:ev.companyMethod||'Cash',post_prod_expense:ev.postProdExpense||0,post_prod_date:ev.postProdDate||null,post_prod_done:ev.postProdDone||false,amount_received:ev.amountReceived??null,client_pending:ev.clientPending??null};}
 
-async function saveEventDb(ev){const{data,error}=await sb.from('events').upsert(stateEventToDb(ev),{onConflict:'id'}).select('id').single();if(error){console.error('saveEvent:',error.message);}else if(data&&data.id!==undefined&&ev.id!==data.id){ev.id=data.id;}}
-async function deleteEventDb(id){const{error}=await sb.from('events').delete().eq('id',id);if(error)console.error('deleteEventDb:',error.message);}
-async function saveGstEntryDb(ev){const{data,error}=await sb.from('gst_entries').upsert(stateGstToDb(ev),{onConflict:'id'}).select('id').single();if(error){console.error('saveGstEntry:',error.message);}else if(data&&data.id!==undefined&&ev.id!==data.id){ev.id=data.id;}}
-async function deleteGstEntryDb(id){const{error}=await sb.from('gst_entries').delete().eq('id',id);if(error)console.error('deleteGstEntryDb:',error.message);}
+async function saveEventDb(ev){const{data,error}=await sb.from('events').upsert(stateEventToDb(ev),{onConflict:'id'}).select('id').single();if(error){console.error('saveEvent:',error.message);return;}if(data&&data.id!==undefined&&ev.id!==data.id){ev.id=data.id;}saveExpensesForEvent(ev.id,'Non-GST',ev.expenses||[]);saveVendorsForEvent(ev.id,'Non-GST',ev.vendors||[]);}
+async function deleteEventDb(id){const{error}=await sb.from('events').delete().eq('id',id);if(error)console.error('deleteEventDb:',error.message);deleteExpensesVendorsForEvent(id,'Non-GST');deleteAllInstallmentsForEvent(id,'Non-GST');}
+async function saveGstEntryDb(ev){const{data,error}=await sb.from('gst_entries').upsert(stateGstToDb(ev),{onConflict:'id'}).select('id').single();if(error){console.error('saveGstEntry:',error.message);return;}if(data&&data.id!==undefined&&ev.id!==data.id){ev.id=data.id;}saveExpensesForEvent(ev.id,'GST',ev.expenses||[]);saveVendorsForEvent(ev.id,'GST',ev.vendors||[]);}
+async function deleteGstEntryDb(id){const{error}=await sb.from('gst_entries').delete().eq('id',id);if(error)console.error('deleteGstEntryDb:',error.message);deleteExpensesVendorsForEvent(id,'GST');deleteAllInstallmentsForEvent(id,'GST');}
 
 async function saveDeductionDb(row){if(row.db_id){const{error}=await sb.from('deductions').update({person:row.person,type:row.type,year:row.year,month:row.month,amount:row.amount}).eq('id',row.db_id);if(error){console.error('saveDed update:',error.message);return false;}return true;}else{const{data,error}=await sb.from('deductions').insert({person:row.person,type:row.type,year:row.year,month:row.month,amount:row.amount}).select('id').single();if(error){console.error('saveDed insert:',error.message);return false;}row.db_id=data.id;return true;}}
 async function deleteDeductionDb(db_id){const{error}=await sb.from('deductions').delete().eq('id',db_id);if(error)console.error('deleteDed:',error.message);}
+
+// ── event_expenses / event_vendors ────────────────────────────────
+async function saveExpensesForEvent(evId,evSource,expenses){
+  await sb.from('event_expenses').delete().eq('event_id',String(evId)).eq('event_source',evSource);
+  if(!expenses||!expenses.length)return;
+  const rows=expenses.map(e=>({event_id:String(evId),event_source:evSource,type:e.type||'',note:e.note||'',amount:e.amount||0}));
+  const{data,error}=await sb.from('event_expenses').insert(rows).select('id');
+  if(error){console.error('saveExpenses:',error.message);return;}
+  (data||[]).forEach((r,i)=>{if(expenses[i])expenses[i].db_id=r.id;});
+}
+async function saveVendorsForEvent(evId,evSource,vendors){
+  await sb.from('event_vendors').delete().eq('event_id',String(evId)).eq('event_source',evSource);
+  if(!vendors||!vendors.length)return;
+  const rows=vendors.map(v=>({event_id:String(evId),event_source:evSource,name:v.name||'',type:v.type||'',payment:v.payment||0}));
+  const{data,error}=await sb.from('event_vendors').insert(rows).select('id');
+  if(error){console.error('saveVendors:',error.message);return;}
+  (data||[]).forEach((r,i)=>{if(vendors[i])vendors[i].db_id=r.id;});
+}
+async function deleteExpensesVendorsForEvent(evId,evSource){
+  await sb.from('event_expenses').delete().eq('event_id',String(evId)).eq('event_source',evSource);
+  await sb.from('event_vendors').delete().eq('event_id',String(evId)).eq('event_source',evSource);
+}
+// ── installments ─────────────────────────────────────────────────
+async function saveInstallmentDb(evId,evSource,payment){
+  const row={ev_id:String(evId),ev_source:evSource,payment_id:payment.id,amount:payment.amount||0,date:payment.date||null,method:payment.method||'Cash',note:payment.note||''};
+  const{data,error}=await sb.from('installments').insert(row).select('id').single();
+  if(error){console.error('saveInstallmentDb:',error.message);return false;}
+  payment.db_id=data.id;return true;
+}
+async function deleteInstallmentDb(db_id){
+  const{error}=await sb.from('installments').delete().eq('id',db_id);
+  if(error)console.error('deleteInstallmentDb:',error.message);
+}
+async function deleteAllInstallmentsForEvent(evId,evSource){
+  await sb.from('installments').delete().eq('ev_id',String(evId)).eq('ev_source',evSource);
+}
 
 async function savePurchaseDb(row){if(row.db_id){const{error}=await sb.from('company_purchases').update({serial:row.serial,description:row.description,date:row.date||null,bill_type:row.billType,pay_method:row.payMethod,amount:row.amount}).eq('id',row.db_id);if(error)console.error('savePurch update:',error.message);}else{const{data,error}=await sb.from('company_purchases').insert({serial:row.serial,description:row.description,date:row.date||null,bill_type:row.billType,pay_method:row.payMethod,amount:row.amount}).select('id').single();if(error)console.error('savePurch insert:',error.message);else row.db_id=data.id;}}
 async function deletePurchaseDb(db_id){const{error}=await sb.from('company_purchases').delete().eq('id',db_id);if(error)console.error('deletePurch:',error.message);}
@@ -1647,7 +1683,7 @@ async function saveConfigDb(key,arr){const{error}=await sb.from('app_config').up
 
 async function loadAllFromSupabase(){
   showLoadingOverlay('Connecting to database...');
-  const[{data:evRows},{data:gstRows},{data:dedRows},{data:purchRows},{data:gstPayRows},{data:cobRows},{data:pobRows},{data:sobRows},{data:cfgRows}]=await Promise.all([
+  const[{data:evRows},{data:gstRows},{data:dedRows},{data:purchRows},{data:gstPayRows},{data:cobRows},{data:pobRows},{data:sobRows},{data:cfgRows},{data:expRows},{data:vendRows},{data:instRows}]=await Promise.all([
     sb.from('events').select('*').order('date'),
     sb.from('gst_entries').select('*').order('date'),
     sb.from('deductions').select('*').order('id'),
@@ -1656,10 +1692,19 @@ async function loadAllFromSupabase(){
     sb.from('company_ob').select('*'),
     sb.from('partner_ob').select('*'),
     sb.from('sathis_ob').select('*'),
-    sb.from('app_config').select('*')
+    sb.from('app_config').select('*'),
+    sb.from('event_expenses').select('*').order('id'),
+    sb.from('event_vendors').select('*').order('id'),
+    sb.from('installments').select('*').order('id')
   ]);
-  state.events=(evRows||[]).map(dbEventToState);
-  state.gstEntries=(gstRows||[]).map(dbGstToState);
+  // Build expenses/vendors lookup maps
+  const expMap={},vendMap={},instMap={};
+  (expRows||[]).forEach(r=>{const k=r.event_id+'|'+r.event_source;if(!expMap[k])expMap[k]=[];expMap[k].push({db_id:r.id,type:r.type||'',note:r.note||'',amount:r.amount||0});});
+  (vendRows||[]).forEach(r=>{const k=r.event_id+'|'+r.event_source;if(!vendMap[k])vendMap[k]=[];vendMap[k].push({db_id:r.id,name:r.name||'',type:r.type||'',payment:r.payment||0});});
+  (instRows||[]).forEach(r=>{const k=r.ev_id+'|'+r.ev_source;if(!instMap[k])instMap[k]=[];instMap[k].push({db_id:r.id,id:r.payment_id,amount:r.amount||0,date:r.date||'',method:r.method||'Cash',note:r.note||''});});
+  state._expMap=expMap;state._vendMap=vendMap;state._instMap=instMap;
+  state.events=(evRows||[]).map(r=>({...dbEventToState(r),expenses:expMap[String(r.id)+'|Non-GST']||[],vendors:vendMap[String(r.id)+'|Non-GST']||[]}));
+  state.gstEntries=(gstRows||[]).map(r=>({...dbGstToState(r),expenses:expMap[String(r.id)+'|GST']||[],vendors:vendMap[String(r.id)+'|GST']||[]}));
   if(!state.dashData)state.dashData={deductions:[],companyPurchases:[],gstPayments:[]};
   state.dashData.deductions=(dedRows||[]).map(r=>({db_id:r.id,person:r.person,type:r.type,year:r.year,month:r.month,amount:r.amount||0}));
   state.dashData.companyPurchases=(purchRows||[]).map(r=>({db_id:r.id,serial:r.serial,description:r.description||'',date:r.date||'',billType:r.bill_type||'Non-GST',payMethod:r.pay_method||'Cash',amount:r.amount||0}));
@@ -1982,8 +2027,7 @@ function renderTable(){
 function deleteEvent(id){
   if(!confirm('Delete this event?'))return;
   state.events=state.events.filter(e=>e.id!=id);
-  if(state.installments)state.installments=state.installments.filter(x=>!(x.evId==id&&x.evSource==='Non-GST'));
-  saveInstallmentsDb();
+  if(state._instMap)delete state._instMap[String(id)+'|Non-GST'];
   deleteEventDb(id);renderTable();showToast('Event deleted');
 }
 
@@ -2341,8 +2385,7 @@ function renderGstTable(){
 function deleteGstEntry(id){
   if(!confirm('Delete this entry?'))return;
   state.gstEntries=state.gstEntries.filter(e=>e.id!=id);
-  if(state.installments)state.installments=state.installments.filter(x=>!(x.evId==id&&x.evSource==='GST'));
-  saveInstallmentsDb();
+  if(state._instMap)delete state._instMap[String(id)+'|GST'];
   deleteGstEntryDb(id);renderGstTable();showToast('Entry deleted');
 }
 
@@ -5289,14 +5332,21 @@ function markPostProdDone(id,source){
 // ══════════════════════════════════════════════════════════════════
 // Installments stored in state.installments = [{evId,evSource,client,evTotal,evDate,evType,payments:[{id,amount,date,method,note}]}]
 function getInstallments(){
-  if(!state.installments)state.installments=[];
-  return state.installments;
+  if(!state._instMap)state._instMap={};
+  const allEvs=[...(state.events||[]).map(e=>({...e,_src:'Non-GST'})),...(state.gstEntries||[]).map(e=>({...e,_src:'GST'}))];
+  const recs=[];
+  Object.entries(state._instMap).forEach(([k,payments])=>{
+    if(!payments||!payments.length)return;
+    const[evId,evSource]=k.split('|');
+    const ev=allEvs.find(e=>String(e.id)===String(evId)&&e._src===evSource);
+    recs.push({evId,evSource,client:ev?ev.client:'',evTotal:ev?ev.total:0,evDate:ev?ev.date:'',evType:ev?(ev.type||ev.bizType||''):'',payments:[...payments]});
+  });
+  return recs;
 }
-async function saveInstallmentsDb(){
-  await saveConfigDb('installments',state.installments||[]);
+function getInstallmentsForEvent(evId,evSource){
+  if(!state._instMap)state._instMap={};
+  return state._instMap[String(evId)+'|'+evSource]||[];
 }
-// Load installments from config (loaded by loadAllFromSupabase via cfgRows)
-// cfgRows loop already handles: state[r.key]=r.value  → state.installments = array
 
 let _instEditingId=null; // event id being logged
 
@@ -5317,8 +5367,8 @@ function renderInstallmentSearch(){
   el.innerHTML=`<div style="font-size:11px;color:var(--muted);margin-bottom:8px">Click "+ Log Payment" on the event to add an installment:</div>`+
   allEvents.slice(0,10).map(ev=>{
     const bal=waBalance(ev);
-    const instData=getInstallments().find(x=>x.evId==ev.id&&x.evSource===ev._source);
-    const instTotal=(instData?.payments||[]).reduce((s,p)=>s+(+p.amount||0),0);
+    const _instPmts=getInstallmentsForEvent(ev.id,ev._source);
+    const instTotal=_instPmts.reduce((s,p)=>s+(+p.amount||0),0);
     return`<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;flex-wrap:wrap;gap:8px">
       <div>
         <div style="font-weight:500;font-size:13px">${ev.client} <span style="font-size:10px;color:var(--muted);background:var(--surface);border-radius:4px;padding:1px 6px">${ev._source}</span></div>
@@ -5331,7 +5381,7 @@ function renderInstallmentSearch(){
 
 function renderInstallmentLog(){
   const el=document.getElementById('st-inst-log');
-  const insts=getInstallments().filter(x=>x.payments&&x.payments.length>0);
+  const insts=getInstallments().filter(x=>x.payments&&x.payments.length>0); // legacy compat
   if(!insts.length){
     el.innerHTML='<div style="text-align:center;padding:24px;color:var(--muted);font-size:13px">No installment payments logged yet.</div>';
     return;
@@ -5373,8 +5423,8 @@ function openInstModal(evId,evSource){
   _instEditingId={evId,evSource};
   document.getElementById('inst-modal-title').textContent='Log Payment — '+ev.client;
   const bal=waBalance(ev);
-  const instData=getInstallments().find(x=>x.evId==evId&&x.evSource===evSource);
-  const instTotal=(instData?.payments||[]).reduce((s,p)=>s+(+p.amount||0),0);
+  const _instPmts2=getInstallmentsForEvent(evId,evSource);
+  const instTotal=_instPmts2.reduce((s,p)=>s+(+p.amount||0),0);
   document.getElementById('inst-modal-event-info').innerHTML=`
     <div style="font-weight:600;font-size:14px;margin-bottom:4px">${ev.client}</div>
     <div style="font-size:11px;color:var(--muted)">${ev.type||'-'} · ${ev.date||'-'}</div>
@@ -5399,8 +5449,8 @@ function instRecalc(){
   if(!ev)return;
   const bal=waBalance(ev);
   const newAmt=+document.getElementById('inst-amount').value||0;
-  const instData=getInstallments().find(x=>x.evId==evId&&x.evSource===evSource);
-  const instTotal=(instData?.payments||[]).reduce((s,p)=>s+(+p.amount||0),0);
+  const instData=getInstallmentsForEvent(evId,evSource);
+  const instTotal=(instData||[]).reduce((s,p)=>s+(+p.amount||0),0);
   const remaining=Math.max(0,bal-instTotal-newAmt);
   document.getElementById('inst-recalc-box').innerHTML=`
     <div style="display:flex;gap:20px;flex-wrap:wrap">
@@ -5409,7 +5459,7 @@ function instRecalc(){
       <span>Remaining after this: <strong style="color:${remaining>0?'#F87171':'#3DD68C'}">${fmt(remaining)}</strong></span>
     </div>`;
 }
-function saveInstallment(){
+async function saveInstallment(){
   if(!_instEditingId)return;
   const {evId,evSource}=_instEditingId;
   const amount=+document.getElementById('inst-amount').value||0;
@@ -5418,23 +5468,22 @@ function saveInstallment(){
   const method=document.getElementById('inst-method').value;
   const note=document.getElementById('inst-note').value.trim();
   const payment={id:'P'+Date.now(),amount,date,method,note};
-  const insts=getInstallments();
   const isGstSource = evSource==='GST';
   const evArr = isGstSource ? (state.gstEntries||[]) : (state.events||[]);
-  // Use == not === because evId from template string may be "5" while ev.id from DB may be 5
   const ev=evArr.find(e=>e.id==evId);
-  let rec=insts.find(x=>x.evId==evId&&x.evSource===evSource);
-  if(!rec){
-    rec={evId,evSource,client:ev?ev.client:'',evTotal:ev?ev.total:0,evDate:ev?ev.date:'',evType:ev?(ev.type||''):'',payments:[]};
-    insts.push(rec);
-  }
-  rec.payments.push(payment);
-  saveInstallmentsDb();
+  // Save to DB
+  const saved=await saveInstallmentDb(evId,evSource,payment);
+  if(!saved){showToast('❌ Payment save failed');return;}
+  // Update local _instMap
+  if(!state._instMap)state._instMap={};
+  const k=String(evId)+'|'+evSource;
+  if(!state._instMap[k])state._instMap[k]=[];
+  state._instMap[k].push(payment);
 
   // ── Sync payment to event record ──────────────────────────────────
   try {
     if(ev){
-      const totalInstalled=rec.payments.reduce((s,p)=>s+(+p.amount||0),0);
+      const totalInstalled=(state._instMap[k]||[]).reduce((s,p)=>s+(+p.amount||0),0);
       const grandTotal = isGstSource
         ? ((ev.total||0)+(ev.gst||0)-(ev.tds||0))
         : (ev.total||0);
@@ -5465,12 +5514,18 @@ function saveInstallment(){
   renderInstallmentLog();
   renderInstallmentSearch();
 }
-function deleteInstallment(evId,evSource,pid){
+async function deleteInstallment(evId,evSource,pid){
   if(!confirm('Delete this installment record?'))return;
-  const insts=getInstallments();
-  const rec=insts.find(x=>x.evId==evId&&x.evSource===evSource);
-  if(rec){rec.payments=rec.payments.filter(p=>p.id!==pid);}
-  saveInstallmentsDb();
+  // Find payment in local map to get db_id
+  if(!state._instMap)state._instMap={};
+  const k=String(evId)+'|'+evSource;
+  const payments=state._instMap[k]||[];
+  const pmt=payments.find(p=>p.id===pid);
+  if(pmt&&pmt.db_id)await deleteInstallmentDb(pmt.db_id);
+  // Remove from local map
+  state._instMap[k]=(payments).filter(p=>p.id!==pid);
+  // Build rec for balance recalc below
+  const rec={payments:state._instMap[k]};
 
   // ── Re-sync event balance after deletion ──────────────────────────
   try {
