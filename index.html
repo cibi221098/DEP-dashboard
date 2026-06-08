@@ -1596,7 +1596,7 @@ async function deleteEventDb(id){const{error}=await sb.from('events').delete().e
 async function saveGstEntryDb(ev){const{error}=await sb.from('gst_entries').upsert(stateGstToDb(ev),{onConflict:'id'});if(error)console.error('saveGstEntry:',error.message);}
 async function deleteGstEntryDb(id){const{error}=await sb.from('gst_entries').delete().eq('id',id);if(error)console.error('deleteGstEntryDb:',error.message);}
 
-async function saveDeductionDb(row){if(row.db_id){const{error}=await sb.from('deductions').update({person:row.person,type:row.type,year:row.year,month:row.month,amount:row.amount}).eq('id',row.db_id);if(error)console.error('saveDed update:',error.message);}else{const{data,error}=await sb.from('deductions').insert({person:row.person,type:row.type,year:row.year,month:row.month,amount:row.amount}).select('id').single();if(error)console.error('saveDed insert:',error.message);else row.db_id=data.id;}}
+async function saveDeductionDb(row){if(row.db_id){const{error}=await sb.from('deductions').update({person:row.person,type:row.type,year:row.year,month:row.month,amount:row.amount}).eq('id',row.db_id);if(error){console.error('saveDed update:',error.message);return false;}return true;}else{const{data,error}=await sb.from('deductions').insert({person:row.person,type:row.type,year:row.year,month:row.month,amount:row.amount}).select('id').single();if(error){console.error('saveDed insert:',error.message);return false;}row.db_id=data.id;return true;}}
 async function deleteDeductionDb(db_id){const{error}=await sb.from('deductions').delete().eq('id',db_id);if(error)console.error('deleteDed:',error.message);}
 
 async function savePurchaseDb(row){if(row.db_id){const{error}=await sb.from('company_purchases').update({serial:row.serial,description:row.description,date:row.date||null,bill_type:row.billType,pay_method:row.payMethod,amount:row.amount}).eq('id',row.db_id);if(error)console.error('savePurch update:',error.message);}else{const{data,error}=await sb.from('company_purchases').insert({serial:row.serial,description:row.description,date:row.date||null,bill_type:row.billType,pay_method:row.payMethod,amount:row.amount}).select('id').single();if(error)console.error('savePurch insert:',error.message);else row.db_id=data.id;}}
@@ -2758,7 +2758,7 @@ function closeDedModal(){
   _dedModalIdx    = null;
 }
 
-function saveDedModal(){
+async function saveDedModal(){
   const type   = document.getElementById('ded-m-type').value.trim();
   const year   = document.getElementById('ded-m-year').value;
   const month  = document.getElementById('ded-m-month').value;
@@ -2772,28 +2772,31 @@ function saveDedModal(){
   const personName = _dedModalPerson==='ragul'?'Ragul Vignesh':_dedModalPerson==='ashwath'?'Ashwath Kumar':'Sathis Kumar';
   const ded = getDashState().deductions;
 
+  let saveOk = true;
   if(_dedModalIdx !== null){
     const row = ded[_dedModalIdx];
     row.type = type; row.year = year; row.month = month; row.amount = amount;
-    saveDeductionDb(row);
+    saveOk = await saveDeductionDb(row);
   } else {
     const row = {person:personName, type, year, month, amount};
     ded.push(row);
-    saveDeductionDb(row);
+    saveOk = await saveDeductionDb(row);
+    if(!saveOk) ded.pop(); // rollback local if DB failed
   }
 
   recalcAllPartnerCarryForward();
   recalcSathisCarryForward();
   renderDeductionTab();
+  renderPartnersSummary();
   renderDashboard();
-  showToast('Saved ✓');
+  showToast(saveOk ? 'Saved ✓' : '❌ Save failed — check connection');
 }
 
-function removeDeductionRow(idx){
+async function removeDeductionRow(idx){
   const row=getDashState().deductions[idx];
-  if(row&&row.db_id)deleteDeductionDb(row.db_id);
+  if(row&&row.db_id)await deleteDeductionDb(row.db_id);
   getDashState().deductions.splice(idx,1);
-  recalcAllPartnerCarryForward(); recalcSathisCarryForward(); renderDeductionTab(); renderDashboard();
+  recalcAllPartnerCarryForward(); recalcSathisCarryForward(); renderDeductionTab(); renderPartnersSummary(); renderDashboard();
 }
 
 // ─── DEDUCTION EDIT STATE (removed — now modal-based) ─────────────────────────
@@ -5413,14 +5416,40 @@ function saveInstallment(){
   const note=document.getElementById('inst-note').value.trim();
   const payment={id:'P'+Date.now(),amount,date,method,note};
   const insts=getInstallments();
-  const ev=[...(state.events||[]),...(state.gstEntries||[])].find(e=>e.id===evId);
+  const isGstSource = evSource==='GST';
+  const evArr = isGstSource ? (state.gstEntries||[]) : (state.events||[]);
+  const ev=evArr.find(e=>e.id===evId);
   let rec=insts.find(x=>x.evId===evId&&x.evSource===evSource);
   if(!rec){
-    rec={evId,evSource,client:ev.client,evTotal:ev.total,evDate:ev.date,evType:ev.type||'',payments:[]};
+    rec={evId,evSource,client:ev?ev.client:'',evTotal:ev?ev.total:0,evDate:ev?ev.date:'',evType:ev?(ev.type||''):'',payments:[]};
     insts.push(rec);
   }
   rec.payments.push(payment);
   saveInstallmentsDb();
+
+  // ── Sync payment to event record ──────────────────────────────────
+  if(ev){
+    const totalInstalled=rec.payments.reduce((s,p)=>s+(+p.amount||0),0);
+    const grandTotal = isGstSource
+      ? ((ev.total||0)+(ev.gst||0)-(ev.tds||0))
+      : (ev.total||0);
+    const rawBalance = grandTotal - (ev.advance||0) - totalInstalled;
+    if(rawBalance<=0){
+      ev.balanceStatus='Paid';
+      ev.amountReceived=(ev.advance||0)+totalInstalled;
+      ev.clientPending=0;
+    } else {
+      ev.balanceStatus='Partially Paid';
+      ev.amountReceived=(ev.advance||0)+totalInstalled;
+      ev.clientPending=rawBalance;
+    }
+    if(isGstSource) saveGstEntryDb(ev);
+    else saveEventDb(ev);
+    renderTable();
+    renderDashboard();
+  }
+  // ─────────────────────────────────────────────────────────────────
+
   showToast('Payment logged!');
   closeInstModal();
   renderInstallmentLog();
@@ -5432,6 +5461,38 @@ function deleteInstallment(evId,evSource,pid){
   const rec=insts.find(x=>x.evId===evId&&x.evSource===evSource);
   if(rec){rec.payments=rec.payments.filter(p=>p.id!==pid);}
   saveInstallmentsDb();
+
+  // ── Re-sync event balance after deletion ──────────────────────────
+  const isGstSource = evSource==='GST';
+  const evArr = isGstSource ? (state.gstEntries||[]) : (state.events||[]);
+  const ev=evArr.find(e=>e.id===evId);
+  if(ev){
+    const totalInstalled=(rec?.payments||[]).reduce((s,p)=>s+(+p.amount||0),0);
+    const grandTotal = isGstSource
+      ? ((ev.total||0)+(ev.gst||0)-(ev.tds||0))
+      : (ev.total||0);
+    const rawBalance = grandTotal - (ev.advance||0) - totalInstalled;
+    if(rawBalance<=0){
+      ev.balanceStatus='Paid';
+      ev.amountReceived=(ev.advance||0)+totalInstalled;
+      ev.clientPending=0;
+    } else if(totalInstalled>0){
+      ev.balanceStatus='Partially Paid';
+      ev.amountReceived=(ev.advance||0)+totalInstalled;
+      ev.clientPending=rawBalance;
+    } else {
+      // no installments left — revert to Pending
+      ev.balanceStatus='Pending';
+      ev.amountReceived=null;
+      ev.clientPending=null;
+    }
+    if(isGstSource) saveGstEntryDb(ev);
+    else saveEventDb(ev);
+    renderTable();
+    renderDashboard();
+  }
+  // ─────────────────────────────────────────────────────────────────
+
   showToast('Installment deleted');
   renderInstallmentLog();
 }
