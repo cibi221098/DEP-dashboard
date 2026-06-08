@@ -2766,15 +2766,17 @@ async function saveDedModal(){
 
   if(!type){ document.getElementById('ded-m-type').focus(); return; }
 
-  // Close modal immediately — before any recalc that could error
+  // Capture person and idx BEFORE closeDedModal() clears them
+  const personName = _dedModalPerson==='ragul'?'Ragul Vignesh':_dedModalPerson==='ashwath'?'Ashwath Kumar':'Sathis Kumar';
+  const editingIdx = _dedModalIdx;
+
   closeDedModal();
 
-  const personName = _dedModalPerson==='ragul'?'Ragul Vignesh':_dedModalPerson==='ashwath'?'Ashwath Kumar':'Sathis Kumar';
   const ded = getDashState().deductions;
 
   let saveOk = true;
-  if(_dedModalIdx !== null){
-    const row = ded[_dedModalIdx];
+  if(editingIdx !== null){
+    const row = ded[editingIdx];
     row.type = type; row.year = year; row.month = month; row.amount = amount;
     saveOk = await saveDeductionDb(row);
   } else {
