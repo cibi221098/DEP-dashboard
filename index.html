@@ -1,4 +1,4 @@
-<style>
+\<style>
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600&family=DM+Sans:wght@300;400;500&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--black:#0a0a0a;--gold:#B8960C;--gold-light:#D4AF37;--gold-pale:#FBF5DC;--gold-border:#C9A227;--white:#fff;--surface:#F9F7F0;--border:#E8E0C8;--muted:#6B6555;--danger:#C0392B;--success:#1A7A4A;--radius:10px}
@@ -1958,7 +1958,7 @@ function getFiltered(){
   return fyFilterArr(state.events,fy).filter(e=>
     (!mo||e.month===mo)&&(!ty||e.type===ty)&&
     (!st||(st==='not_fully_paid'?(e.balanceStatus==='Pending'||e.balanceStatus==='Partially Paid'):e.balanceStatus===st))
-  );
+  ).sort((a,b)=>(parseInt((b.id||'').replace(/[^0-9]/g,''))||0)-(parseInt((a.id||'').replace(/[^0-9]/g,''))||0));
 }
 
 function renderSummary(filtered){
@@ -2277,7 +2277,7 @@ function getGstFiltered(){
   return fyFilterArr(state.gstEntries||[],fy).filter(e=>
     (!mo||e.month===mo)&&(!biz||e.bizType===biz)&&
     (!st||(st==='not_fully_paid'?(e.balanceStatus==='Pending'||e.balanceStatus==='Partially Paid'):e.balanceStatus===st))
-  );
+  ).sort((a,b)=>(parseInt((b.id||'').replace(/[^0-9]/g,''))||0)-(parseInt((a.id||'').replace(/[^0-9]/g,''))||0));
 }
 
 function renderGstSummary(filtered){
