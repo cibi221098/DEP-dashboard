@@ -1645,20 +1645,22 @@ async function saveCompanyObDb(yr,e){
   // company_ob: year is primary key (text) — upsert so it works whether or not a row already exists
   const{error}=await sb.from('company_ob')
     .upsert({year:yr,cash_override:e.cashOverride??null,acct_override:e.acctOverride??null},{onConflict:'year'});
-  if(error)console.error('saveCompanyOb upsert:',error.message);
+  if(error){console.error('saveCompanyOb upsert:',error.message);return error.message;}
+  return null;
 }
 async function deleteCompanyObDb(yr){const{error}=await sb.from('company_ob').delete().eq('year',yr);if(error)console.error('deleteCompanyOb:',error.message);}
 async function savePartnerObDb(person,yr,e){
   // partner_ob: has id PK, person+year are unique identifiers
   const{data:rows,error:selErr}=await sb.from('partner_ob').select('id').eq('person',person).eq('year',yr);
-  if(selErr){console.error('savePartnerOb select:',selErr.message);return;}
+  if(selErr){console.error('savePartnerOb select:',selErr.message);return selErr.message;}
   if(rows&&rows.length>0){
     const{error}=await sb.from('partner_ob').update({override:e.override??null,auto:e.auto||0}).eq('id',rows[0].id);
-    if(error)console.error('savePartnerOb update:',error.message);
+    if(error){console.error('savePartnerOb update:',error.message);return error.message;}
   }else{
     const{error}=await sb.from('partner_ob').insert({person,year:yr,override:e.override??null,auto:e.auto||0});
-    if(error)console.error('savePartnerOb insert:',error.message);
+    if(error){console.error('savePartnerOb insert:',error.message);return error.message;}
   }
+  return null;
 }
 async function deletePartnerObDb(person,yr){const{error}=await sb.from('partner_ob').delete().eq('person',person).eq('year',yr);if(error)console.error('deletePartnerOb:',error.message);}
 async function deleteSathisObDb(yr){const{error}=await sb.from('sathis_ob').delete().eq('year',yr);if(error)console.error('deleteSathisOb:',error.message);}
@@ -1666,7 +1668,8 @@ async function saveSathisObDb(yr,e){
   // sathis_ob: year is primary key (text) — upsert so it works whether or not a row already exists
   const{error}=await sb.from('sathis_ob')
     .upsert({year:yr,override:e.override??null,auto:e.auto||0},{onConflict:'year'});
-  if(error)console.error('saveSathisOb upsert:',error.message);
+  if(error){console.error('saveSathisOb upsert:',error.message);return error.message;}
+  return null;
 }
 async function saveConfigDb(key,arr){const{error}=await sb.from('app_config').upsert({key,value:arr},{onConflict:'key'});if(error)console.error('saveConfig:',error.message);}
 
@@ -1711,12 +1714,15 @@ async function loadAllFromSupabase(){
 }
 
 async function save(){
-  const yob=state.yearOpeningBal||{};for(const yr of Object.keys(yob)){await saveCompanyObDb(yr,yob[yr]);}
-  const pyob=state.partnerYearOB||{};for(const p of Object.keys(pyob)){for(const yr of Object.keys(pyob[p])){await savePartnerObDb(p,yr,pyob[p][yr]);}}
-  const syob=state.sathisYearOB||{};for(const yr of Object.keys(syob)){await saveSathisObDb(yr,syob[yr]);}
+  // Collect DB errors so callers' .catch() can surface them as a visible toast (instead of a false "saved ✓")
+  const errs=[];
+  const yob=state.yearOpeningBal||{};for(const yr of Object.keys(yob)){const e=await saveCompanyObDb(yr,yob[yr]);if(e)errs.push('Company OB '+yr+': '+e);}
+  const pyob=state.partnerYearOB||{};for(const p of Object.keys(pyob)){for(const yr of Object.keys(pyob[p])){const e=await savePartnerObDb(p,yr,pyob[p][yr]);if(e)errs.push(p+' '+yr+': '+e);}}
+  const syob=state.sathisYearOB||{};for(const yr of Object.keys(syob)){const e=await saveSathisObDb(yr,syob[yr]);if(e)errs.push('Sathis OB '+yr+': '+e);}
   await saveConfigDb('types',state.types||[]);
   await saveConfigDb('mkTypes',state.mkTypes||[]);
   await saveConfigDb('coordinators',state.coordinators||[]);
+  if(errs.length)throw new Error(errs.join(' | '));
 }
 </script>
 
