@@ -3699,7 +3699,7 @@ function renderAnalytics(){
           const pos=val>=0;
           return`<span style="padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600;background:${pos?'#0D2E1A':'#2E0D0D'};color:${pos?'#3DD68C':'#F87171'}">${pos?'↑':'↓'} ${Math.abs(val).toFixed(1)}%</span>`;
         };
-        const isActive=!yr||d.year===yr;
+        const isActive=!fy||d.year===fy;
         return`<tr style="border-top:1px solid #252B38;${isActive?'background:#1A1E27':''}">
           <td style="padding:9px 12px"><strong style="font-family:'Playfair Display',serif;font-size:15px;color:#F5C842">${d.year}</strong></td>
           <td style="padding:9px 12px;text-align:center;color:#aaa">${d.count}</td>
